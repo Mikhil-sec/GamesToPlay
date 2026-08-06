@@ -10,59 +10,100 @@ import com.mikhilnaika.continueapp.core.data.entity.PileEntryEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
 /** docs/02-PRODUCT-SPEC.md §1 — NOW PLAYING is hard-capped at 3. */
 const val NOW_PLAYING_CAP = 3
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class PileViewModel @Inject constructor(
     private val pileDao: PileDao,
 ) : ViewModel() {
 
     private val selectedState = MutableStateFlow(PileState.BACKLOG)
+    private val viewMode = MutableStateFlow(PileViewMode.GRID)
     private val sort = MutableStateFlow(PileSort.DATE_ADDED)
+    private val platformFilter = MutableStateFlow<String?>(null)
+    private val genreFilter = MutableStateFlow<String?>(null)
+    private val lengthBucketFilter = MutableStateFlow<LengthBucket?>(null)
     private val hoursPerWeek = MutableStateFlow(6f)
     private val swapPrompt = MutableStateFlow<SwapPrompt?>(null)
 
     private val _uiState = MutableStateFlow(PileUiState())
     val state: StateFlow<PileUiState> = _uiState
 
+    private val json = Json { ignoreUnknownKeys = true }
+
     init {
-        viewModelScope.launch {
-            selectedState.collect { pileState ->
-                launch {
-                    pileDao.observeByState(pileState).collect { entries ->
-                        applyEntries(pileState, entries)
-                    }
-                }
+        combine(
+            selectedState.flatMapLatest { pileDao.observeByState(it) },
+            sort,
+            platformFilter,
+            genreFilter,
+            lengthBucketFilter,
+        ) { rawEntries, sortOrder, platform, genre, lengthBucket ->
+            val filtered = rawEntries
+                .filter { platform == null || platformsOf(it).contains(platform) }
+                .filter { genre == null || genresOf(it).contains(genre) }
+                .filter { lengthBucket == null || fitsLengthBucket(it, lengthBucket) }
+            val sorted = sortEntries(filtered, sortOrder)
+            RawSnapshot(
+                sorted = sorted,
+                totalHours = filtered.sumOf { it.playtimeHoursNormally ?: 0 },
+                totalGames = filtered.size,
+                availablePlatforms = rawEntries.flatMap { platformsOf(it) }.distinct().sorted(),
+                availableGenres = rawEntries.flatMap { genresOf(it) }.distinct().sorted(),
+            )
+        }.onEach { snapshot ->
+            _uiState.update {
+                it.copy(
+                    selectedState = selectedState.value,
+                    entries = snapshot.sorted,
+                    totalHours = snapshot.totalHours,
+                    totalGames = snapshot.totalGames,
+                    availablePlatforms = snapshot.availablePlatforms,
+                    availableGenres = snapshot.availableGenres,
+                    isLoading = false,
+                )
             }
-        }
-        viewModelScope.launch {
-            sort.collect { s -> _uiState.update { it.copy(entries = sortEntries(it.entries, s), sort = s) } }
-        }
-        viewModelScope.launch {
-            hoursPerWeek.collect { hpw -> _uiState.update { it.copy(hoursPerWeek = hpw) } }
-        }
-        viewModelScope.launch {
-            swapPrompt.collect { prompt -> _uiState.update { it.copy(swapPrompt = prompt) } }
-        }
+        }.launchIn(viewModelScope)
+
+        viewMode.onEach { vm -> _uiState.update { it.copy(viewMode = vm) } }.launchIn(viewModelScope)
+        sort.onEach { s -> _uiState.update { it.copy(sort = s) } }.launchIn(viewModelScope)
+        platformFilter.onEach { p -> _uiState.update { it.copy(platformFilter = p) } }.launchIn(viewModelScope)
+        genreFilter.onEach { g -> _uiState.update { it.copy(genreFilter = g) } }.launchIn(viewModelScope)
+        lengthBucketFilter.onEach { l -> _uiState.update { it.copy(lengthBucketFilter = l) } }.launchIn(viewModelScope)
+        hoursPerWeek.onEach { hpw -> _uiState.update { it.copy(hoursPerWeek = hpw) } }.launchIn(viewModelScope)
+        swapPrompt.onEach { prompt -> _uiState.update { it.copy(swapPrompt = prompt) } }.launchIn(viewModelScope)
     }
 
-    private fun applyEntries(pileState: PileState, entries: List<PileEntryWithGame>) {
-        val sorted = sortEntries(entries, sort.value)
-        val totalHours = entries.sumOf { (it.playtimeHoursNormally ?: 0) }
-        _uiState.update {
-            it.copy(
-                selectedState = pileState,
-                entries = sorted,
-                totalHours = totalHours,
-                totalGames = entries.size,
-                isLoading = false,
-            )
-        }
+    private data class RawSnapshot(
+        val sorted: List<PileEntryWithGame>,
+        val totalHours: Int,
+        val totalGames: Int,
+        val availablePlatforms: List<String>,
+        val availableGenres: List<String>,
+    )
+
+    private fun platformsOf(entry: PileEntryWithGame): List<String> = decodeStringList(entry.platformsJson)
+    private fun genresOf(entry: PileEntryWithGame): List<String> = decodeStringList(entry.genresJson)
+
+    private fun decodeStringList(jsonStr: String): List<String> =
+        runCatching { json.decodeFromString<List<String>>(jsonStr) }.getOrDefault(emptyList())
+
+    private fun fitsLengthBucket(entry: PileEntryWithGame, bucket: LengthBucket): Boolean {
+        val hours = entry.playtimeHoursNormally ?: return false
+        val fitsMax = bucket.maxHours == null || hours <= bucket.maxHours
+        return hours >= bucket.minHours && fitsMax
     }
 
     private fun sortEntries(entries: List<PileEntryWithGame>, sortOrder: PileSort): List<PileEntryWithGame> =
@@ -79,8 +120,24 @@ class PileViewModel @Inject constructor(
         selectedState.value = pileState
     }
 
+    fun setViewMode(mode: PileViewMode) {
+        viewMode.value = mode
+    }
+
     fun setSort(newSort: PileSort) {
         sort.value = newSort
+    }
+
+    fun setPlatformFilter(platform: String?) {
+        platformFilter.value = if (platformFilter.value == platform) null else platform
+    }
+
+    fun setGenreFilter(genre: String?) {
+        genreFilter.value = if (genreFilter.value == genre) null else genre
+    }
+
+    fun setLengthBucketFilter(bucket: LengthBucket?) {
+        lengthBucketFilter.value = if (lengthBucketFilter.value == bucket) null else bucket
     }
 
     fun setHoursPerWeek(hpw: Float) {

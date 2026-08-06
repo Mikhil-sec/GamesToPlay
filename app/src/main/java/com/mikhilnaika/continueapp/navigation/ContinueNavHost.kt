@@ -7,17 +7,23 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.mikhilnaika.continueapp.core.ui.ArcadeNavItem
 import com.mikhilnaika.continueapp.core.ui.ArcadeScaffold
+import com.mikhilnaika.continueapp.feature.completion.CreditsRollScreen
 import com.mikhilnaika.continueapp.feature.discover.DiscoverScreen
-import com.mikhilnaika.continueapp.feature.draw.DrawPlaceholderScreen
+import com.mikhilnaika.continueapp.feature.draw.DrawScreen
 import com.mikhilnaika.continueapp.feature.onboarding.OnboardingScreen
 import com.mikhilnaika.continueapp.feature.pile.PileScreen
 import com.mikhilnaika.continueapp.feature.profile.ProfileScreen
+import com.mikhilnaika.continueapp.feature.rank.RankScreen
+import com.mikhilnaika.continueapp.feature.share.PileShareScreen
+import com.mikhilnaika.continueapp.feature.stacks.StacksScreen
 
 /**
  * Root nav graph. Onboarding gates everything else (docs/02-PRODUCT-SPEC.md §8) and is
@@ -33,7 +39,8 @@ fun ContinueNavHost(
     val startDestination = if (onboardingComplete) NavDestinations.PILE else NavDestinations.ONBOARDING
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    val showBottomBar = currentRoute != null && currentRoute != NavDestinations.ONBOARDING
+    val fullScreenRoutes = setOf(NavDestinations.ONBOARDING, NavDestinations.CREDITS_ROLL, NavDestinations.RANK, NavDestinations.SHARE_PILE)
+    val showBottomBar = currentRoute != null && currentRoute !in fullScreenRoutes
 
     ArcadeScaffold(
         navItemsLeft = listOf(
@@ -58,10 +65,47 @@ fun ContinueNavHost(
                     }
                 })
             }
-            composable(NavDestinations.PILE) { PileScreen() }
+            composable(NavDestinations.PILE) {
+                PileScreen(
+                    onGameCompleted = { entryId ->
+                        navController.navigate(NavDestinations.creditsRoll(entryId))
+                    },
+                    onOpenStacks = { navController.navigate(NavDestinations.STACKS) },
+                    onOpenShare = { navController.navigate(NavDestinations.SHARE_PILE) },
+                )
+            }
+            composable(NavDestinations.STACKS) { StacksScreen() }
+            composable(NavDestinations.SHARE_PILE) { PileShareScreen(onDismiss = { navController.popBackStack() }) }
             composable(NavDestinations.DISCOVER) { DiscoverScreen() }
-            composable(NavDestinations.DRAW) { DrawPlaceholderScreen() }
+            composable(NavDestinations.DRAW) {
+                DrawScreen(onNavigateToDiscover = {
+                    navController.navigate(NavDestinations.DISCOVER) { launchSingleTop = true }
+                })
+            }
             composable(NavDestinations.PROFILE) { ProfileScreen() }
+            composable(
+                NavDestinations.CREDITS_ROLL,
+                arguments = listOf(navArgument("entryId") { type = NavType.LongType }),
+            ) {
+                CreditsRollScreen(
+                    onRankIt = { gameId ->
+                        navController.navigate(NavDestinations.rank(gameId)) {
+                            popUpTo(NavDestinations.PILE)
+                        }
+                    },
+                    onSkipToPile = {
+                        navController.navigate(NavDestinations.PILE) { popUpTo(NavDestinations.PILE) { inclusive = true } }
+                    },
+                )
+            }
+            composable(
+                NavDestinations.RANK,
+                arguments = listOf(navArgument("gameId") { type = NavType.LongType }),
+            ) {
+                RankScreen(onFinished = {
+                    navController.navigate(NavDestinations.PILE) { popUpTo(NavDestinations.PILE) { inclusive = true } }
+                })
+            }
         }
     }
 }

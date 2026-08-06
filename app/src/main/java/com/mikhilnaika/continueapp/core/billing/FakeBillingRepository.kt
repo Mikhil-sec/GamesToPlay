@@ -33,4 +33,13 @@ class FakeBillingRepository @Inject constructor() : BillingRepository {
     override suspend fun refreshBalance() {
         // No-op: nothing to refresh from without a real backend.
     }
+
+    override suspend fun earnCoins(amount: Int, reason: String): SpendResult {
+        coinBalance.value += amount
+        return SpendResult.Success(coinBalance.value)
+    }
+
+    /** No real offering exists in debug either — honest about the actual limitation rather
+     * than faking a Package the RevenueCat SDK never issued. */
+    override suspend fun currentOfferingPackage(): Package? = null
 }

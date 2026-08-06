@@ -75,6 +75,23 @@ class RealBillingRepository @Inject constructor() : BillingRepository {
         // Balance lives server-side once /coins/spend is live; nothing to refresh yet.
     }
 
+    override suspend fun earnCoins(amount: Int, reason: String): SpendResult =
+        SpendResult.Error("Coin rewards require AdMob server-side verification, not yet configured (docs/09-PENDING-INPUTS.md)")
+
+    override suspend fun currentOfferingPackage(): Package? = suspendCancellableCoroutine { cont ->
+        Purchases.sharedInstance.getOfferings(
+            object : com.revenuecat.purchases.interfaces.ReceiveOfferingsCallback {
+                override fun onReceived(offerings: com.revenuecat.purchases.Offerings) {
+                    cont.resume(offerings.current?.availablePackages?.firstOrNull())
+                }
+
+                override fun onError(error: PurchasesError) {
+                    cont.resume(null)
+                }
+            },
+        )
+    }
+
     companion object {
         const val ENTITLEMENT_PRO = "pro"
     }

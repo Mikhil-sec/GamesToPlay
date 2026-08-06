@@ -7,8 +7,15 @@ enum class PileSort {
     DATE_ADDED, TITLE, LENGTH_SHORT_FIRST, RATING, PLATFORM, RELEASE_DATE
 }
 
-enum class LengthBucket(val maxHours: Int?) {
-    UNDER_5(5), FIVE_TO_15(15), FIFTEEN_TO_40(40), OVER_40(null)
+/** docs/02-PRODUCT-SPEC.md §1 "Views" — STACK is the signature 3D view, deferred (see
+ * docs/10-BUILD-STATUS.md); GRID and LIST are both real here. */
+enum class PileViewMode { GRID, LIST }
+
+enum class LengthBucket(val label: String, val minHours: Int, val maxHours: Int?) {
+    UNDER_5("UNDER 5H", 0, 5),
+    FIVE_TO_15("5-15H", 5, 15),
+    FIFTEEN_TO_40("15-40H", 15, 40),
+    OVER_40("40H+", 40, null),
 }
 
 /**
@@ -22,10 +29,14 @@ data class SwapPrompt(
 
 data class PileUiState(
     val selectedState: PileState = PileState.BACKLOG,
+    val viewMode: PileViewMode = PileViewMode.GRID,
     val entries: List<PileEntryWithGame> = emptyList(),
     val sort: PileSort = PileSort.DATE_ADDED,
     val platformFilter: String? = null,
     val genreFilter: String? = null,
+    val lengthBucketFilter: LengthBucket? = null,
+    val availablePlatforms: List<String> = emptyList(),
+    val availableGenres: List<String> = emptyList(),
     val totalHours: Int = 0,
     val totalGames: Int = 0,
     val hoursPerWeek: Float = 6f,

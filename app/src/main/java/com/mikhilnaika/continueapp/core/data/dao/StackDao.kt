@@ -23,6 +23,9 @@ interface StackDao {
     @Delete
     suspend fun delete(stack: StackEntity)
 
+    @Query("UPDATE stacks SET name = :name, emoji = :emoji WHERE stackId = :stackId")
+    suspend fun rename(stackId: Long, name: String, emoji: String?)
+
     @Query("SELECT * FROM stack_members WHERE stackId = :stackId ORDER BY sortOrder ASC")
     fun observeMembers(stackId: Long): Flow<List<StackMemberEntity>>
 

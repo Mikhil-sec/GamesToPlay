@@ -32,4 +32,15 @@ interface BillingRepository {
     suspend fun purchase(activity: Activity, pkg: Package): PurchaseResult
     suspend fun spendCoins(amount: Int, sku: String): SpendResult
     suspend fun refreshBalance()
+
+    /**
+     * Credits coins after a verified rewarded-ad watch — docs/02-PRODUCT-SPEC.md §3
+     * "INSERT COIN → watch rewarded ad → 1 coin". Real implementation fails closed until the
+     * Worker's server-side-verification endpoint exists (docs/09-PENDING-INPUTS.md), same
+     * pattern as [spendCoins] — never grant currency client-side in production.
+     */
+    suspend fun earnCoins(amount: Int, reason: String): SpendResult
+
+    /** The first purchasable package in the current offering, or null if none is configured yet. */
+    suspend fun currentOfferingPackage(): Package?
 }

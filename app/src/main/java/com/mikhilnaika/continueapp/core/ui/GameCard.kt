@@ -1,7 +1,9 @@
 package com.mikhilnaika.continueapp.core.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
@@ -25,6 +27,7 @@ import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
  * The grid/list unit everywhere in the app: box art, title, and an optional metadata line
  * ("SHORT · COZY · ON YOUR SWITCH" style annotations belong to the caller).
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GameCard(
     title: String,
@@ -32,12 +35,19 @@ fun GameCard(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
 ) {
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(ContinueShapes.RADIUS_CARD_DP.dp))
             .background(ContinueColors.SurfaceCabinet)
-            .let { if (onClick != null) it.clickable(onClick = onClick) else it }
+            .let {
+                when {
+                    onLongClick != null -> it.combinedClickable(onClick = onClick ?: {}, onLongClick = onLongClick)
+                    onClick != null -> it.clickable(onClick = onClick)
+                    else -> it
+                }
+            }
     ) {
         Box(
             modifier = Modifier
