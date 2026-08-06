@@ -1,0 +1,14 @@
+# Copy this file to local.properties and fill in real values.
+# local.properties is gitignored — never commit your copy.
+
+sdk.dir=/path/to/your/Android/sdk
+
+# RevenueCat PUBLIC SDK key — safe to be public, but keep it out of source
+# control anyway so rotation is easy. See CLAUDE.md for the current value.
+REVENUECAT_PUBLIC_KEY=goog_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Your deployed Cloudflare Worker base URL (see /worker)
+WORKER_BASE_URL=https://continue-worker.your-subdomain.workers.dev
+
+# AdMob app ID — public, but not yet provisioned. See docs/09-PENDING-INPUTS.md.
+ADMOB_APP_ID=ca-app-pub-xxxxxxxxxxxxxxxx~xxxxxxxxxx

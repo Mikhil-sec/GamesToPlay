@@ -1,0 +1,208 @@
+# CONTINUE? — Submission Kit
+
+Draft copy and asset checklists. Finalize in week 7; draft now so nothing is written at 2am.
+
+---
+
+## Deliverables checklist
+
+| Item | Required by | Status |
+|---|---|---|
+| Play Store URL (published) | Gaming, Design, Catvertising | ☐ |
+| Public repo + OSI licence visible in About | Next Gen | ☐ |
+| Demo video < 2:00, public on YouTube | All | ☐ |
+| Text description | All | ☐ |
+| 1024×1024 app icon | All | ☐ |
+| Screenshot 1179×2556, **no device frame** | All | ☐ |
+| Free trial **or** promo code | All except Next Gen | ☐ (7-day trial + backup code) |
+| Design write-up | Design Award | ☐ |
+| Ads write-up | Catvertising | ☐ |
+| Influencer category write-up | Gaming | ☐ |
+| Academic email on Devpost | Next Gen | ☐ |
+
+---
+
+## Demo video script (1:50)
+
+The single highest-leverage asset. Most judges form their opinion here. Record on a real
+device at 60fps, screen-record with `adb`/scrcpy for clean frames, and show your hands for
+the gesture moments.
+
+| Time | Shot | Voiceover |
+|---|---|---|
+| **0:00–0:10** | Cold open: CRT powers on, `CONTINUE?` glows, coin drops | "Every gamer has a pile of shame. Mine is eighty-seven games I'll never play." |
+| **0:10–0:22** | Steam import: empty app → 143 games flooding in | "So I built CONTINUE? — a bucket list for games that works like an arcade cabinet." |
+| **0:22–0:35** | **Share Target**: real YouTube video → share sheet → sheet resolves → added. Show the source app the whole time. | "Saw a game in a video? Share it. Two seconds, and it's in your pile — you never leave YouTube." |
+| **0:35–0:55** | **DRAW**: set dials, pull the lever, cards deal and flip, swipe up | "But a backlog isn't a list problem, it's a *decision* problem. Tell it how much time you've got and what mood you're in — and pull the lever." |
+| **0:55–1:05** | **CONTINUE? screen**, INSERT COIN, ad, coin lands, FREE PLAY banner starts | "Out of draws? In an arcade, you insert a coin. Watch an ad, get a coin — or an hour of full Pro, verified server-side by RevenueCat." |
+| **1:05–1:22** | Mark complete → **Credits Roll** in full | "And when you finally finish something, it doesn't just tick a box." |
+| **1:22–1:38** | **Pairwise ranking**, then the HIGH SCORE share card | "Then rank it — not with stars nobody calibrates, but head to head, until you've got a real top ten worth arguing about." |
+| **1:38–1:50** | Share card posted; end on the logo + Play badge | "CONTINUE? Your pile of shame, finally fun. On Google Play now." |
+
+**Rules:** no copyrighted music (original or documented CC0 only) · no influencer names or
+likenesses · show it running on a real device · under 2:00 hard.
+
+---
+
+## Devpost text description (draft)
+
+> **CONTINUE? — your pile of shame, finally fun.**
+>
+> Every gamer has a backlog. Mine had 87 games in it. Every app built to manage that backlog
+> is a spreadsheet with box art — and a spreadsheet of 87 unplayed games is a guilt machine.
+> So people stop opening them.
+>
+> CONTINUE? reframes the backlog as an arcade continue screen. In an arcade, `CONTINUE?`
+> was never failure — it was a second chance, a countdown, and a coin. Your unfinished games
+> aren't debt. They're a queue of second chances.
+>
+> **Save.** Share any game from anywhere on Android — a YouTube review, a Reddit thread, a
+> Steam page — straight into your pile. A sheet slides up over the app you're already in,
+> resolves the title, and adds it in about two seconds. Or import your whole Steam library
+> in one tap.
+>
+> **Organize.** Stacks, smart filters, a "shortest first" view for when you actually want to
+> finish something, and a hard cap of three games in NOW PLAYING because focus is a feature.
+> A Time Budget bar tells you the truth: *412 hours. 87 games. At six hours a week, you're
+> done in 2029.*
+>
+> **Decide.** The real problem isn't recording games, it's paralysis. Tell CONTINUE? how much
+> time you have, what mood you're in, and what console you're near — then pull the lever. It
+> deals you three cards from your own pile and tells you *why* each one matched.
+>
+> **Complete.** Finishing a game triggers a full Credits Roll — your stats scrolling like
+> film credits over the key art, with a coin shower. Completion should feel like something.
+>
+> **Rate.** No stars. Star ratings are uncalibrated noise. CONTINUE? asks "which did you
+> enjoy more?" and binary-searches the game into your personal all-time ranking. You don't
+> get an 8/10 — you get *your #4 of all time*.
+>
+> **Share.** Your top ten as an arcade high-score table. Your completion as a rank card.
+> Your pile as a stat card that says *"412 hours. 87 games. Send help."*
+>
+> Built with Kotlin and Jetpack Compose. Monetized with RevenueCat: a Pro subscription,
+> consumable coin packs, and virtual currency earned from server-verified rewarded ads —
+> all three layers in one revenue stack.
+
+---
+
+## Influencer category write-up (Gaming)
+
+> **Category: Gaming — Gaming Influencer Award.**
+>
+> The brief asked for a gaming bucket list where players can easily save, organize, complete,
+> rate, and share the games they want to play. CONTINUE? addresses each, and treats the
+> third judging criterion — *does this feel enjoyable rather than a chore* — as the primary
+> design constraint rather than a nice-to-have.
+>
+> **The audience** is the backlog gamer: someone with a Steam library in the hundreds, a
+> Game Pass subscription, a Switch, and a sincere intention to play all of it. They already
+> follow gaming creators precisely because they're trying to decide what's worth their
+> limited hours. Their bottleneck isn't discovering games — creators solved that — it's
+> **capturing** what they discover and then **choosing** among it.
+>
+> CONTINUE? serves that exact loop. Android's share sheet means a game recommended in a video
+> reaches the pile in two seconds without leaving the video. The DRAW machine then does the
+> deciding, which is the thing a 200-game library makes impossible. And the ranking and share
+> cards give the audience a way to talk back — a personal top ten is inherently arguable,
+> which is the currency of gaming communities.
+>
+> No influencer's name, likeness, brand, or logo appears anywhere in the app, its store
+> listing, its artwork, or its marketing.
+
+---
+
+## Design Award write-up
+
+> **What to look at, in order:**
+>
+> 1. **The DRAW lever and card deal (0:35 in the video).** The lever is genuinely
+>    physics-driven — spring resistance, a detent, and a haptic at the bottom, not a button
+>    with a canned animation. The three cards deal along distinct arcs with staggered timing
+>    and settle at slightly randomized angles, so it reads as *dealt* rather than laid out.
+>    Every card is interruptible mid-flight; swipe commits are decided by velocity, not
+>    distance.
+> 2. **The Credits Roll (1:05).** Clearing a game plays a ~7-second cinematic: CRT power-on,
+>    per-letter title reveal, key art Ken Burns, film-style credits of your own stats, and a
+>    coin-shower particle burst. It's the emotional peak of the app and it's skippable on tap.
+> 3. **Pairwise ranking (1:22).** A new interaction for this category. Instead of a star
+>    rating, two games go head to head and binary-search the new entry into your all-time
+>    list in five taps or fewer.
+> 4. **The share cards.** Rendered live from Compose to a bitmap, not from templates — the
+>    HIGH SCORE card lays your real top ten out as an arcade leaderboard.
+> 5. **The Time Budget visualization.** Every game in your pile as a proportional bar, with a
+>    slider that recalculates the year you'd finish. Data as an emotional object.
+>
+> **The system.** Neo-arcade, dark only, built on a deliberate restraint: modern layout and
+> spacing, retro only in accents. Scanlines appear at 3% opacity on exactly two surfaces.
+> Chromatic aberration appears on exactly one word. One gold accent carries the whole app;
+> green and magenta are punctuation. A single spinning-coin animation is reused as the app's
+> mascot motion across earning, spending, adding, and clearing — one authored gesture instead
+> of twelve unrelated ones.
+
+---
+
+## Catvertising write-up
+
+> **The premise: in an arcade, continuing has always cost a coin.** So in CONTINUE?, a
+> rewarded ad isn't an interruption grafted onto the product — it's the product's central
+> metaphor made literal.
+>
+> **The stack has three layers, unified by RevenueCat.**
+> Ads sit at the bottom and feed **Coins** (RevenueCat Virtual Currency), which can equally
+> be *bought* as consumable IAPs or *granted* monthly by the **Pro subscription**. Because
+> all three converge on one currency, they're a single system rather than three tactics —
+> and RevenueCat reports ad revenue and subscription revenue in one view of customer value.
+>
+> **Every ad is user-initiated, explicitly priced, and additive.**
+>
+> - **INSERT COIN.** Free users get one draw a day. The second draw opens an arcade continue
+>   screen: watch an ad for a coin, spend a coin you have, or go Pro. The countdown loops
+>   rather than locking anyone out — it's atmosphere, never a punishment.
+> - **FREE PLAY MODE.** The strongest idea here: a rewarded ad grants **60 minutes of the
+>   real `pro` entitlement**, using RevenueCat's server-verified temporary-entitlement ad
+>   reward. The user gets genuine premium — unlimited draws, every share theme, full Steam
+>   import — with a live countdown in the top bar. It's the best conversion mechanism in the
+>   app, because people who feel Pro for an hour buy Pro. And it makes the ad unambiguously
+>   *generous*: it hands the user more app.
+> - **Theme unlock.** A premium share-card theme costs 25 coins or one ad for a single use.
+>   Purely cosmetic; the user wanted the thing and chose the price.
+> - **Import unlock.** Free Steam import shows 10 of your games; one ad unlocks the rest —
+>   at the precise moment the user most wants the app to work.
+>
+> **What we refused to build,** because it matters as much as what we did:
+> no app-open interstitials, no banners, no forced ads between draws, and no advertising
+> anywhere near the Credits Roll. You never monetize the emotional peak.
+>
+> Rewards are granted only on AdMob's server-side verification callback into RevenueCat —
+> never client-side — so they can't be spoofed. Pro subscribers see zero ads, and their coin
+> stipend means they never touch the ad economy at all.
+
+---
+
+## Next Gen write-up
+
+> Built solo, in eight weeks, as a student. The repository is public and MIT-licensed, with
+> the Android app and its Cloudflare Worker backend in one place, plus the full design and
+> architecture docs the project was built from.
+>
+> **Technical choices worth noting:** offline-first (Room is the source of truth, the network
+> only fills the cache, so the pile works on a plane); a Worker backend that exists for a
+> specific reason — a public repo cannot ship API keys, and RevenueCat's virtual-currency
+> spend requires a secret key, so both live server-side; and a RevenueCat integration that
+> goes well beyond a single paywall — entitlements, virtual currency, consumable IAP,
+> server-verified ad rewards, temporary entitlements, remote paywalls, and Customer Center.
+
+---
+
+## Asset production notes
+
+- **1024×1024 icon** — original artwork, no game art, no influencer branding. Must read at
+  48dp.
+- **1179×2556 screenshots, no device frames** — this is an iPhone 15 Pro resolution, so
+  render at that exact size from an emulator configured to match, or compose them from
+  captures. Do not upscale.
+- **Screenshot picks (in order):** the DRAW cards mid-deal · the Credits Roll · pairwise
+  ranking · the HIGH SCORE share card · the pile with the Time Budget bar.
+- **Feature graphic 1024×500** — wordmark on the arcade cabinet, no box art.
+- Keep every source file and licence receipt (fonts, audio) in `assets/` in the repo.

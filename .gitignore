@@ -1,0 +1,79 @@
+# ============================================================
+# Secrets — never commit. This repo is PUBLIC (Next Gen requirement).
+# ============================================================
+local.properties
+**/local.properties
+*.env
+.env*
+!.env.example
+**/secrets.*
+!**/secrets.example.*
+
+# Android signing — losing the keystore itself is unrecoverable,
+# but committing it here would be worse: instant key compromise.
+*.jks
+*.keystore
+key.properties
+
+# Cloudflare Worker — secrets live in `wrangler secret put`, never in a file.
+worker/.dev.vars
+worker/.wrangler/
+.wrangler/
+
+# ============================================================
+# Android / Gradle
+# ============================================================
+*.iml
+.gradle/
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+*.hprof
+.navigation/
+/app/release/
+/app/debug/
+/app/build/
+/*/build/
+/*/*/build/
+
+# Signing / release output
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# ============================================================
+# Node / Cloudflare Worker
+# ============================================================
+worker/node_modules/
+worker/dist/
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ============================================================
+# IDE / OS noise
+# ============================================================
+.vscode/
+*.iws
+*.ipr
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================================
+# Misc
+# ============================================================
+*.log
+.env.local
