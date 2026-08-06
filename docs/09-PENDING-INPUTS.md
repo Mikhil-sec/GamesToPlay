@@ -4,7 +4,7 @@
 > decision still waiting on Mikhil. Claude should read this at the start of every session,
 > update it as items resolve, and never block on an item marked "not yet needed."
 >
-> Last updated: 2026-08-05
+> Last updated: 2026-08-06
 
 ---
 
@@ -12,12 +12,12 @@
 
 | Item | Status | Needed for | Notes |
 |---|---|---|---|
-| **Twitch Client ID** | ⏳ Registering — pending Twitch approval | Worker's IGDB proxy | App name `CONTINUE App`, Confidential client, category "Application Integration". Once issued, paste the **Client ID only** here or in chat — it's safe to commit (not a secret). |
-| **Twitch Client Secret** | ⏳ Same registration | Worker's IGDB proxy | **Never paste in chat or commit to a file.** Goes straight into `wrangler secret put TWITCH_CLIENT_SECRET` when the Worker is deployed. |
+| **Twitch Client ID** | ⏳ Registering — pending Twitch approval. Per Mikhil on 2026-08-06, expected by **~2026-08-14** (end of the following week) | Worker's IGDB proxy | App name `CONTINUE App`, Confidential client, category "Application Integration". Once issued, paste the **Client ID only** here or in chat — it's safe to commit (not a secret). Worker auto-falls-back to the bundled seed set until then — nothing is blocked on this for app/Worker development. |
+| **Twitch Client Secret** | ⏳ Same registration, same ~2026-08-14 estimate | Worker's IGDB proxy | **Never paste in chat or commit to a file.** Goes straight into `wrangler secret put TWITCH_CLIENT_SECRET` when the Worker is deployed. |
 | **IGDB partnership email sent** | ⏳ Drafted, not yet sent | Compliance (Shipaton rules require authorization to use 3rd-party APIs) | Draft is in the chat history above. Send to `partner@igdb.com` once the Twitch app exists. Keep the reply — it's compliance evidence. |
-| **Google Play developer account** | ⏳ Registration submitted, verification in progress | Publishing (Gaming, Design, Catvertising categories) | Started ~Aug 5. This is the critical path — see `docs/01-PLAY-STORE-CRITICAL-PATH.md`. |
+| **Google Play developer account** | ⏳ Registration submitted, verification in progress. Per Mikhil on 2026-08-06, expected by **~2026-08-14** | Publishing (Gaming, Design, Catvertising categories) | Started ~Aug 5. This is the critical path — see `docs/01-PLAY-STORE-CRITICAL-PATH.md`. Does not block Week 3+ app feature work (DRAW, Credits Roll, ranking, share cards) — see `docs/10-BUILD-STATUS.md`. |
 | **18 tester Gmail addresses** | ⏳ Not yet collected | Starts the 14-day closed-testing clock | User is confident about reaching 20 when needed. Collect into a Google Group before the Play account goes live, so the clock can start the same day. |
-| **Keystore generated + backed up** | ⏳ Not started | Signing the release APK | Generate in week 1. **Back up in two places immediately** — losing it means never updating the app again. |
+| **Keystore backed up** | ✅ Generated 2026-08-06 at `app/keystore/continue-release.jks`, passwords in gitignored `key.properties`. ⏳ **User backup to two external locations not yet confirmed** | Signing the release APK | **Back up in two places immediately** — losing it means never updating the app again. Ask Mikhil to confirm this got done. |
 
 ## 🟡 Needed later — not blocking current work
 
@@ -45,6 +45,8 @@
 | RevenueCat virtual currency | `COIN` ("Coins") |
 | Cloudflare account | Exists (free tier) |
 | Game data provider | **IGDB**, not RAWG — RAWG confirmed unreachable Aug 5, 2026 |
+| Phase 1 build (roadmap Weeks 1–2) | Built and verified compiling/testing/signing on 2026-08-06 — see `docs/10-BUILD-STATUS.md` |
+| Local dev toolchain | Android SDK at `C:\Android\sdk`, JDK 21 at `C:\Android\jdk21\jdk-21.0.12+8` — see `docs/10-BUILD-STATUS.md` §1 |
 
 ---
 

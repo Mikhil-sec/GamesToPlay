@@ -1,0 +1,15 @@
+name = "continue-worker"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Created via `wrangler kv namespace create CACHE` — paste the real id here once created.
+# Safe to commit: a KV namespace id is not a secret.
+[[kv_namespaces]]
+binding = "CACHE"
+id = "REPLACE_WITH_REAL_KV_NAMESPACE_ID"
+
+# Secrets (TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET, REVENUECAT_SECRET_KEY, STEAM_API_KEY) are
+# never declared here — set via `wrangler secret put <NAME>` per docs/09-PENDING-INPUTS.md.
+# Until TWITCH_CLIENT_ID/SECRET exist, the Worker automatically falls back to the bundled
+# seed data (see src/providers/SeedGameProvider.ts) so every route stays testable offline.

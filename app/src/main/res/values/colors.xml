@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Kept in sync with core/design/Color.kt — XML only needs this for the pre-Compose
+         window background/status/nav bars; everything else is themed in Compose. -->
+    <color name="surface_void">#FF08090C</color>
+</resources>

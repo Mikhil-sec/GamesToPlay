@@ -1,0 +1,11 @@
+# Copy this file to key.properties (repo root) to enable release signing.
+# key.properties is gitignored — never commit your copy.
+#
+# The real continue-release.jks lives at app/keystore/continue-release.jks.
+# BACK THAT FILE UP IN TWO PLACES IMMEDIATELY — losing it means you can never
+# publish an update to this app again under the same package name.
+
+storeFile=app/keystore/continue-release.jks
+storePassword=CHANGE_ME
+keyAlias=continue
+keyPassword=CHANGE_ME

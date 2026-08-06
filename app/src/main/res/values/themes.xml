@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose renders all real UI; this only sets the pre-Compose window background so
+         cold start doesn't flash white on a dark-only app (docs/03-DESIGN-SYSTEM.md §1). -->
+    <style name="Theme.Continue" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/surface_void</item>
+        <item name="android:statusBarColor">@color/surface_void</item>
+        <item name="android:navigationBarColor">@color/surface_void</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
+    <!-- ShareTargetActivity — a transparent bottom-sheet Activity over the source app,
+         never the full app (docs/05-TECH-ARCHITECTURE.md §Share Target implementation). -->
+    <style name="Theme.Continue.Transparent" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Translucent</item>
+    </style>
+</resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Only user data (the pile) is precious — docs/05-TECH-ARCHITECTURE.md. The `games`
+         table is a disposable IGDB cache and is excluded to keep backups small. -->
+    <include domain="database" path="continue.db" />
+    <exclude domain="database" path="continue.db-wal" />
+    <exclude domain="database" path="continue.db-shm" />
+</full-backup-content>

@@ -1,6 +1,7 @@
 # CONTINUE? — Project Context
 
-> Read `docs/00-MASTER-PLAN.md` first, then `docs/09-PENDING-INPUTS.md` to see what's still
+> Read `docs/10-BUILD-STATUS.md` first — what's actually built, verified, broken, and next.
+> Then `docs/00-MASTER-PLAN.md`, then `docs/09-PENDING-INPUTS.md` to see what's still
 > waiting on Mikhil, then the doc for whatever you're building.
 
 ## What this is
@@ -81,6 +82,7 @@ minSdk 26 · targetSdk 36 · Compose BOM latest stable.
 | `docs/07-SUBMISSION-KIT.md` | Devpost copy, video script, asset checklist |
 | `docs/08-GAME-DATA.md` | **IGDB** auth, rate limits, queries, mood mapping, fallbacks |
 | `docs/09-PENDING-INPUTS.md` | **Living checklist** of everything still waiting on Mikhil |
+| `docs/10-BUILD-STATUS.md` | **Read first.** What's built, verified, broken, and next |
 
 ## Working agreements
 
