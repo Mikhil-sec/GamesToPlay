@@ -16,6 +16,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -167,6 +171,20 @@ private fun ManualEntryField(prefill: String, onSearch: (String) -> Unit) {
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
+            placeholder = { Text("Game name") },
+            // The prefill is a whole video caption. Without this, correcting a bad match means
+            // holding backspace through 60-odd characters before you can type anything.
+            trailingIcon = {
+                if (query.isNotEmpty()) {
+                    IconButton(onClick = { query = "" }) {
+                        Icon(
+                            imageVector = Icons.Filled.Clear,
+                            contentDescription = "Clear",
+                            tint = ContinueColors.TextSecondary,
+                        )
+                    }
+                }
+            },
         )
         androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 8.dp))
         Button(onClick = { onSearch(query) }, modifier = Modifier.fillMaxWidth(), enabled = query.isNotBlank()) {

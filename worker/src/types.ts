@@ -4,6 +4,15 @@ export interface Env {
   TWITCH_CLIENT_SECRET?: string;
   REVENUECAT_SECRET_KEY?: string;
   STEAM_API_KEY?: string;
+
+  // Rate limiters — see src/security.ts. Optional so the Worker still boots (fail-open) if a
+  // deploy is missing the binding, rather than 500ing every request.
+  /** Per-IP budget for ordinary reads. */
+  API_LIMITER?: RateLimit;
+  /** Per-IP budget for `/resolve`, which fans one request out to several IGDB searches. */
+  RESOLVE_LIMITER?: RateLimit;
+  /** Account-wide ceiling on IGDB-touching work, so many IPs can't drain the shared quota. */
+  GLOBAL_LIMITER?: RateLimit;
 }
 
 /** Mirrors app/.../core/network/dto/GameDto.kt — keep the two in sync by hand. */
@@ -51,6 +60,8 @@ export interface SteamOwnedGame {
 
 export interface SteamOwnedResponse {
   games: SteamOwnedGame[];
+  /** True when the library exceeded the import cap and only the most-played games are here. */
+  truncated: boolean;
 }
 
 /** docs/08-GAME-DATA.md — swappable in one file if the provider changes again. */

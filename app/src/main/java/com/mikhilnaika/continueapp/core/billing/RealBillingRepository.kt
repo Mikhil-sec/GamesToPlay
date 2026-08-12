@@ -7,8 +7,13 @@ import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.PurchasesError
 import com.revenuecat.purchases.interfaces.PurchaseCallback
 import com.revenuecat.purchases.interfaces.UpdatedCustomerInfoListener
+import com.mikhilnaika.continueapp.core.data.CoinLedger
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -17,13 +22,18 @@ import kotlin.coroutines.resume
 /**
  * Real RevenueCat-backed implementation. `Purchases.configure()` is called once in
  * `ContinueApplication.onCreate` with the public SDK key — this works today per
- * docs/05-TECH-ARCHITECTURE.md even with no products configured yet, and gets the
- * anonymous app-user ID flowing. `/coins/spend` isn't live on the Worker yet
- * (docs/09-PENDING-INPUTS.md), so [spendCoins] fails closed with a clear error rather than
- * silently granting currency.
+ * docs/05-TECH-ARCHITECTURE.md even with no products configured yet, and gets the anonymous
+ * app-user ID flowing.
+ *
+ * Entitlements (`pro`) are read from RevenueCat and are authoritative. **Coins are not** —
+ * they're held in [CoinLedger] on-device, because the coin economy gates DRAW and CLAUDE.md's
+ * constraint #5 requires that to work offline. See [CoinLedger] for why that's the right
+ * trade-off today and what replaces it once AdMob server-side verification is possible.
  */
 @Singleton
-class RealBillingRepository @Inject constructor() : BillingRepository {
+class RealBillingRepository @Inject constructor(
+    private val coinLedger: CoinLedger,
+) : BillingRepository {
     private val _isPro = MutableStateFlow(false)
     override val isPro: StateFlow<Boolean> = _isPro
 
@@ -33,7 +43,11 @@ class RealBillingRepository @Inject constructor() : BillingRepository {
     private val _coinBalance = MutableStateFlow(0)
     override val coinBalance: StateFlow<Int> = _coinBalance
 
+    /** Singleton-scoped, so it lives as long as the process — nothing to cancel. */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     init {
+        scope.launch { coinLedger.balance.collect { _coinBalance.value = it } }
         Purchases.sharedInstance.updatedCustomerInfoListener = UpdatedCustomerInfoListener { info ->
             applyCustomerInfo(info)
         }
@@ -68,15 +82,17 @@ class RealBillingRepository @Inject constructor() : BillingRepository {
         )
     }
 
-    override suspend fun spendCoins(amount: Int, sku: String): SpendResult =
-        SpendResult.Error("Coin spend requires the Worker's /coins/spend endpoint, not yet configured (docs/09-PENDING-INPUTS.md)")
+    override suspend fun spendCoins(amount: Int, sku: String): SpendResult {
+        val newBalance = coinLedger.spend(amount) ?: return SpendResult.InsufficientFunds
+        return SpendResult.Success(newBalance)
+    }
 
     override suspend fun refreshBalance() {
-        // Balance lives server-side once /coins/spend is live; nothing to refresh yet.
+        // The ledger's Flow is already collected into _coinBalance in init; nothing to pull.
     }
 
     override suspend fun earnCoins(amount: Int, reason: String): SpendResult =
-        SpendResult.Error("Coin rewards require AdMob server-side verification, not yet configured (docs/09-PENDING-INPUTS.md)")
+        SpendResult.Success(coinLedger.earn(amount))
 
     override suspend fun currentOfferingPackage(): Package? = suspendCancellableCoroutine { cont ->
         Purchases.sharedInstance.getOfferings(

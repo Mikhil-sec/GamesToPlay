@@ -8,6 +8,7 @@ import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
+import com.mikhilnaika.continueapp.BuildConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.suspendCancellableCoroutine
 import javax.inject.Inject
@@ -17,21 +18,26 @@ import kotlin.coroutines.resume
 private class AdMobLoadedAd(val rewardedAd: RewardedAd) : LoadedAd
 
 /**
- * Real AdMob-backed implementation. Test unit IDs are used until real rewarded units are
- * created (docs/09-PENDING-INPUTS.md — AdMob approval has its own latency, separate from
- * Play Console). Test IDs cannot be server-side verified, so [show]'s reward here is
- * granted from the SDK's onUserEarnedReward callback only in test mode; production must
- * call `enableRewardVerification()` and gate on the verified server callback instead
- * (docs/05-TECH-ARCHITECTURE.md — "Never grant client-side").
+ * Real AdMob-backed implementation.
+ *
+ * Ad unit IDs come from `BuildConfig`, defaulting to Google's official public **test** units.
+ * Real units are created but can't fill ads until the app is live on Play, so test units are
+ * the correct choice today — and switching is a `local.properties` edit
+ * (`ADMOB_UNIT_COIN` / `ADMOB_UNIT_FREE_PLAY`), not a code change.
+ *
+ * Test units cannot do server-side verification, so the reward is granted from the SDK's
+ * `onUserEarnedReward` callback. Once real units are live, call `enableRewardVerification()`
+ * and gate on the verified server callback instead — see
+ * [com.mikhilnaika.continueapp.core.data.CoinLedger] for the balance side of that swap.
  */
 @Singleton
 class RealAdRepository @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : AdRepository {
 
-    override suspend fun loadCoinAd(): LoadedAd? = loadRewarded(AD_UNIT_COIN_TEST)
+    override suspend fun loadCoinAd(): LoadedAd? = loadRewarded(BuildConfig.ADMOB_UNIT_COIN)
 
-    override suspend fun loadFreePlayAd(): LoadedAd? = loadRewarded(AD_UNIT_FREE_PLAY_TEST)
+    override suspend fun loadFreePlayAd(): LoadedAd? = loadRewarded(BuildConfig.ADMOB_UNIT_FREE_PLAY)
 
     private suspend fun loadRewarded(adUnitId: String): LoadedAd? = suspendCancellableCoroutine { cont ->
         RewardedAd.load(
@@ -66,9 +72,4 @@ class RealAdRepository @Inject constructor(
         }
     }
 
-    companion object {
-        // Google's published test rewarded ad unit ID — safe to ship until real units exist.
-        const val AD_UNIT_COIN_TEST = "ca-app-pub-3940256099942544/5224354917"
-        const val AD_UNIT_FREE_PLAY_TEST = "ca-app-pub-3940256099942544/5224354917"
-    }
 }

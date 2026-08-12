@@ -34,10 +34,12 @@ interface BillingRepository {
     suspend fun refreshBalance()
 
     /**
-     * Credits coins after a verified rewarded-ad watch — docs/02-PRODUCT-SPEC.md §3
-     * "INSERT COIN → watch rewarded ad → 1 coin". Real implementation fails closed until the
-     * Worker's server-side-verification endpoint exists (docs/09-PENDING-INPUTS.md), same
-     * pattern as [spendCoins] — never grant currency client-side in production.
+     * Credits coins after a rewarded-ad watch, a cleared game, or a streak —
+     * docs/02-PRODUCT-SPEC.md §3 "INSERT COIN → watch rewarded ad → 1 coin".
+     *
+     * Granted on-device via [com.mikhilnaika.continueapp.core.data.CoinLedger]; see that class
+     * for why the balance isn't server-authoritative and what changes when AdMob server-side
+     * verification becomes available.
      */
     suspend fun earnCoins(amount: Int, reason: String): SpendResult
 

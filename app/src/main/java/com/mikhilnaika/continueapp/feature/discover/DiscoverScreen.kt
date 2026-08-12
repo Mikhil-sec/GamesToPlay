@@ -30,6 +30,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -140,7 +141,27 @@ private fun Rails(
     LazyColumn {
         item { Rail(title = "TRENDING NOW", games = trending, addedGameIds = addedGameIds, onAdd = onAdd) }
         item { Rail(title = "SHORT & SWEET", games = shortAndSweet, addedGameIds = addedGameIds, onAdd = onAdd) }
+        item { IgdbAttribution() }
     }
+}
+
+/**
+ * Required, not decorative: IGDB's commercial-partnership terms ask for user-facing
+ * attribution on products integrating their data, and CLAUDE.md makes it non-negotiable on
+ * any screen showing it. DISCOVER is the most IGDB-dense screen in the app — search results,
+ * both rails, and all the cover art come straight from them.
+ */
+@Composable
+private fun IgdbAttribution() {
+    Text(
+        text = "The data was freely provided by IGDB.com",
+        style = ContinueTextStyles.label,
+        color = ContinueColors.TextTertiary,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(ContinueSpacing.LG.dp),
+        textAlign = TextAlign.Center,
+    )
 }
 
 @Composable

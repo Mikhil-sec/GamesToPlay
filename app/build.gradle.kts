@@ -30,8 +30,8 @@ android {
         applicationId = "com.mikhilnaika.continueapp"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -49,6 +49,19 @@ android {
         )
         manifestPlaceholders["admobAppId"] =
             localProp("ADMOB_APP_ID", "ca-app-pub-3940256099942544~3347511713")
+
+        // Default to Google's official public *test* rewarded unit. Real units only fill ads
+        // once the app is live on Play, so test units stay correct until then — and swapping
+        // is then a `local.properties` edit, not a code change. Test units cannot do
+        // server-side verification; see CoinLedger for what that changes.
+        buildConfigField(
+            "String", "ADMOB_UNIT_COIN",
+            "\"${localProp("ADMOB_UNIT_COIN", "ca-app-pub-3940256099942544/5224354917")}\""
+        )
+        buildConfigField(
+            "String", "ADMOB_UNIT_FREE_PLAY",
+            "\"${localProp("ADMOB_UNIT_FREE_PLAY", "ca-app-pub-3940256099942544/5224354917")}\""
+        )
     }
 
     signingConfigs {

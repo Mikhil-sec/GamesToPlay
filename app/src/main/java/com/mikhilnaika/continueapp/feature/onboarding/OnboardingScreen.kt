@@ -20,10 +20,15 @@ import com.mikhilnaika.continueapp.core.design.ContinueColors
 import com.mikhilnaika.continueapp.core.design.ContinueSpacing
 import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
 
-/** Under 40 seconds end to end — docs/02-PRODUCT-SPEC.md §8. */
+/**
+ * Under 40 seconds end to end — docs/02-PRODUCT-SPEC.md §8.
+ *
+ * [onFinished] receives whether the user asked to go straight to search, so "SEARCH FOR GAMES"
+ * actually lands on DISCOVER instead of dumping them on an empty PILE to find it themselves.
+ */
 @Composable
 fun OnboardingScreen(
-    onFinished: () -> Unit,
+    onFinished: (startAtDiscover: Boolean) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: OnboardingViewModel = hiltViewModel(),
 ) {
@@ -39,8 +44,10 @@ fun OnboardingScreen(
         when (state.step) {
             OnboardingStep.COLD_OPEN -> ColdOpenStep(onContinue = viewModel::onColdOpenContinue)
             OnboardingStep.PILE_SIZE -> PileSizeStep(onAnswer = viewModel::onPileSizeAnswered)
-            OnboardingStep.SEED -> SeedStep(onDone = viewModel::onSeedStepDone)
-            OnboardingStep.FIRST_DRAW -> FirstDrawStep(onDone = { viewModel.completeOnboarding(onFinished) })
+            OnboardingStep.SEED -> SeedStep(
+                onSearch = { viewModel.completeOnboarding { onFinished(true) } },
+                onSkip = { viewModel.completeOnboarding { onFinished(false) } },
+            )
         }
     }
 }
@@ -87,7 +94,7 @@ private fun PileSizeStep(onAnswer: (PileSizeAnswer) -> Unit) {
 }
 
 @Composable
-private fun SeedStep(onDone: () -> Unit) {
+private fun SeedStep(onSearch: () -> Unit, onSkip: () -> Unit) {
     Text(
         text = "SEED YOUR PILE",
         style = ContinueTextStyles.titleL,
@@ -101,27 +108,7 @@ private fun SeedStep(onDone: () -> Unit) {
         OutlinedButton(onClick = {}, modifier = Modifier.fillMaxWidth(), enabled = false) {
             Text("IMPORT FROM STEAM (COMING SOON)")
         }
-        Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) { Text("SEARCH FOR GAMES") }
-        OutlinedButton(onClick = onDone, modifier = Modifier.fillMaxWidth()) { Text("SKIP") }
+        Button(onClick = onSearch, modifier = Modifier.fillMaxWidth()) { Text("SEARCH FOR GAMES") }
+        OutlinedButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) { Text("SKIP") }
     }
-}
-
-@Composable
-private fun FirstDrawStep(onDone: () -> Unit) {
-    Text(
-        text = "PULL THE LEVER",
-        style = ContinueTextStyles.titleL,
-        color = ContinueColors.TextPrimary,
-        textAlign = TextAlign.Center,
-    )
-    androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = ContinueSpacing.SM.dp))
-    Text(
-        text = "The full DRAW machine — dials, lever physics, the card deal — is a Week 3 build " +
-            "(docs/06-BUILD-ROADMAP.md). This finishes onboarding and drops you into the app.",
-        style = ContinueTextStyles.body,
-        color = ContinueColors.TextSecondary,
-        textAlign = TextAlign.Center,
-    )
-    androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = ContinueSpacing.XL.dp))
-    Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) { Text("LET'S GO") }
 }

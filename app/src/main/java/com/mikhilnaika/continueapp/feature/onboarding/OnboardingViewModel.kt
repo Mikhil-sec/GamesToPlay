@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-enum class OnboardingStep { COLD_OPEN, PILE_SIZE, SEED, FIRST_DRAW }
+enum class OnboardingStep { COLD_OPEN, PILE_SIZE, SEED }
 
 enum class PileSizeAnswer { UNDER_20, TWENTY_TO_100, DONT_ASK }
 
@@ -37,10 +37,6 @@ class OnboardingViewModel @Inject constructor(
 
     fun onPileSizeAnswered(answer: PileSizeAnswer) {
         _state.value = _state.value.copy(pileSizeAnswer = answer, step = OnboardingStep.SEED)
-    }
-
-    fun onSeedStepDone() {
-        _state.value = _state.value.copy(step = OnboardingStep.FIRST_DRAW)
     }
 
     fun completeOnboarding(onDone: () -> Unit) {

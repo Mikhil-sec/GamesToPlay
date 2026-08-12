@@ -7,7 +7,42 @@ compatibility_flags = ["nodejs_compat"]
 # Safe to commit: a KV namespace id is not a secret.
 [[kv_namespaces]]
 binding = "CACHE"
-id = "REPLACE_WITH_REAL_KV_NAMESPACE_ID"
+id = "5ae55aa10e6441fb986c1e6208871938"
+
+# ------------------------------------------------------------------
+# Abuse controls — see src/security.ts for the threat model.
+# These bindings are free and, unlike a KV-based counter, cost no KV writes — which matters,
+# because the 1,000 writes/day free-tier limit is precisely what they exist to protect.
+# ------------------------------------------------------------------
+
+# Ordinary reads (/games/*). Comfortable for a person typing in the search box; useless to a
+# script. 120/min ≈ 2/sec, well above the 300ms-debounced client.
+[[ratelimits]]
+name = "API_LIMITER"
+namespace_id = "2001"
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
+# /resolve fans one request out to as many as 6 provider searches, so it gets a much tighter
+# per-IP budget than a plain read. A real user shares a handful of links, not 20 a minute.
+[[ratelimits]]
+name = "RESOLVE_LIMITER"
+namespace_id = "2002"
+  [ratelimits.simple]
+  limit = 20
+  period = 60
+
+# Account-wide ceiling, keyed on a constant so every request shares one counter. Per-IP limits
+# do nothing against a distributed attack; this is the backstop that keeps total outbound IGDB
+# pressure bounded no matter how many addresses show up. Sized well under IGDB's 4 req/sec
+# (240/min) so we throttle ourselves before IGDB throttles — or bans — us.
+[[ratelimits]]
+name = "GLOBAL_LIMITER"
+namespace_id = "2003"
+  [ratelimits.simple]
+  limit = 600
+  period = 60
 
 # Secrets (TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET, REVENUECAT_SECRET_KEY, STEAM_API_KEY) are
 # never declared here — set via `wrangler secret put <NAME>` per docs/09-PENDING-INPUTS.md.

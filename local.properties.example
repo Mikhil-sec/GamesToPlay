@@ -10,5 +10,14 @@ REVENUECAT_PUBLIC_KEY=goog_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
 # Your deployed Cloudflare Worker base URL (see /worker)
 WORKER_BASE_URL=https://continue-worker.your-subdomain.workers.dev
 
-# AdMob app ID — public, but not yet provisioned. See docs/09-PENDING-INPUTS.md.
+# AdMob app ID — public by design (it ships in the APK manifest and is extractable from any
+# build). Note the separator: an App ID uses a TILDE, an ad unit ID uses a SLASH. Putting a
+# unit ID here crashes the app at startup — AdMob validates this before Application.onCreate
+# (see bug #6 in docs/10-BUILD-STATUS.md).
 ADMOB_APP_ID=ca-app-pub-xxxxxxxxxxxxxxxx~xxxxxxxxxx
+
+# Rewarded ad unit IDs (SLASH separator). Leave these unset to use Google's public test units,
+# which is correct until the app is live on the Play Store — real units don't fill ads on an
+# unpublished app, and test units can't do server-side verification either way.
+# ADMOB_UNIT_COIN=ca-app-pub-xxxxxxxxxxxxxxxx/xxxxxxxxxx
+# ADMOB_UNIT_FREE_PLAY=ca-app-pub-xxxxxxxxxxxxxxxx/xxxxxxxxxx

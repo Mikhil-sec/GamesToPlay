@@ -70,13 +70,22 @@ Body:
   search "elden ring";
   fields name, cover.image_id, first_release_date, genres.name, themes.name,
          game_modes.name, platforms.name, rating, aggregated_rating, summary;
-  where category = 0 & version_parent = null;
+  where game_type = 0 & version_parent = null;
   limit 20;
 ```
 
-`category = 0 & version_parent = null` filters out DLC, bundles, and editions — without it
+`game_type = 0 & version_parent = null` filters out DLC, bundles, and editions — without it
 search results are full of near-duplicates. This matters a lot for match quality in the
 share target.
+
+> ⚠️ **Do not write `category = 0` here.** IGDB deprecated the `category` enum in favour of
+> the `game_type` reference and stopped populating it. Filtering on it is *not* a syntax
+> error — IGDB returns `200 OK` with an empty array. On 2026-08-12 this was found to be
+> silently returning zero games for every list endpoint in production while `/health` still
+> reported a happy `"provider":"igdb"`. The same trap applies to IGDB's other deprecated
+> fields: `collection` → `collections`, `status` → `game_status`, and `follows` (being
+> removed outright). **Verify a filter still returns rows before trusting it** — a query that
+> matches nothing looks identical to a category with no members.
 
 Nested field access (`cover.image_id`, `genres.name`) means **one request** returns what
 RAWG needed several for — which helps considerably against the 4/sec ceiling.

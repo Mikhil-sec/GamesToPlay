@@ -1,4 +1,5 @@
 import type { Env, GameProvider, SteamOwnedResponse } from "../types.ts";
+import { MAX_STEAM_GAMES } from "../security.ts";
 
 interface SteamApp {
   appid: number;
@@ -44,20 +45,31 @@ export async function getSteamOwnedGames(
     return { status: 502, body: { error: `Steam API request failed: ${ownedResponse.status}` } };
   }
   const ownedData = (await ownedResponse.json()) as SteamOwnedGamesResponse;
-  const steamGames = ownedData.response.games ?? [];
+  const allSteamGames = ownedData.response.games ?? [];
 
-  const games = await Promise.all(
-    steamGames.map(async (steamApp) => {
-      const matches = await provider.search(steamApp.name);
-      const best = matches[0];
-      return {
-        gameId: best?.id ?? null,
-        steamAppId: steamApp.appid,
-        name: steamApp.name,
-        playtimeHours: Math.round((steamApp.playtime_forever / 60) * 10) / 10,
-      };
-    }),
-  );
+  /*
+   * Capped, and matched sequentially rather than with `Promise.all`.
+   *
+   * This was by far the worst amplifier in the codebase: an unbounded `Promise.all` over a
+   * library that can hold thousands of games turned **one** inbound request into thousands of
+   * simultaneous IGDB searches — blowing the 4 req/sec ceiling and the daily KV write budget
+   * from a single curl, with no attacker effort at all. Most-played first, so the cap keeps
+   * the games the user actually cares about.
+   */
+  const steamGames = [...allSteamGames]
+    .sort((a, b) => b.playtime_forever - a.playtime_forever)
+    .slice(0, MAX_STEAM_GAMES);
 
-  return { status: 200, body: { games } };
+  const games = [];
+  for (const steamApp of steamGames) {
+    const matches = await provider.search(steamApp.name).catch(() => []);
+    games.push({
+      gameId: matches[0]?.id ?? null,
+      steamAppId: steamApp.appid,
+      name: steamApp.name,
+      playtimeHours: Math.round((steamApp.playtime_forever / 60) * 10) / 10,
+    });
+  }
+
+  return { status: 200, body: { games, truncated: allSteamGames.length > MAX_STEAM_GAMES } };
 }

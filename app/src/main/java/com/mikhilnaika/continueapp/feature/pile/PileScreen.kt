@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -129,10 +131,11 @@ fun PileScreen(
                 items(state.entries, key = { it.entryId }) { entry ->
                     PileGameCard(
                         entry = entry,
-                        onClick = {
-                            if (entry.state == PileState.BACKLOG) viewModel.moveToPlaying(entry.entryId)
-                            else actionMenuEntry = entry
-                        },
+                        // Tapping used to fling a BACKLOG game straight into NOW PLAYING, which
+                        // read as "the game vanished" — the card left the list with no
+                        // confirmation and no way back. Both gestures now open the same
+                        // chooser; moving a game is always a deliberate, labelled choice.
+                        onClick = { actionMenuEntry = entry },
                         onLongClick = { actionMenuEntry = entry },
                     )
                 }
@@ -146,10 +149,11 @@ fun PileScreen(
                 items(state.entries, key = { it.entryId }) { entry ->
                     PileListRow(
                         entry = entry,
-                        onClick = {
-                            if (entry.state == PileState.BACKLOG) viewModel.moveToPlaying(entry.entryId)
-                            else actionMenuEntry = entry
-                        },
+                        // Tapping used to fling a BACKLOG game straight into NOW PLAYING, which
+                        // read as "the game vanished" — the card left the list with no
+                        // confirmation and no way back. Both gestures now open the same
+                        // chooser; moving a game is always a deliberate, labelled choice.
+                        onClick = { actionMenuEntry = entry },
                         onLongClick = { actionMenuEntry = entry },
                     )
                 }
@@ -170,51 +174,85 @@ fun PileScreen(
             entry = entry,
             stacks = stacksState.stacks,
             onDismiss = { actionMenuEntry = null },
-            onMarkComplete = {
+            onMove = { target ->
                 actionMenuEntry = null
-                onGameCompleted(entry.entryId)
-            },
-            onDrop = {
-                actionMenuEntry = null
-                viewModel.retire(entry.entryId)
-            },
-            onBackToPile = {
-                actionMenuEntry = null
-                viewModel.backToBacklog(entry.entryId)
+                // CLEARED is the one transition that isn't a quiet state change — it earns the
+                // Credits Roll (docs/02-PRODUCT-SPEC.md §4), which grants coins and leads into
+                // RANK. Routing it through the nav callback keeps that payoff intact.
+                if (target == PileState.COMPLETED) onGameCompleted(entry.entryId)
+                else viewModel.moveTo(entry.entryId, target)
             },
             onToggleStack = { stackId -> stacksViewModel.addGameToStack(stackId, entry.gameId) },
         )
     }
 }
 
+/** Label and one-line meaning for each destination, in the order they're offered. */
+private val MOVE_TARGETS: List<Triple<PileState, String, String>> = listOf(
+    Triple(PileState.PLAYING, "NOW PLAYING", "Start it — max 3 at once"),
+    Triple(PileState.COMPLETED, "CLEARED", "Roll the credits"),
+    Triple(PileState.BACKLOG, "THE PILE", "Owned, not started"),
+    Triple(PileState.WISHLIST, "WANTED", "Don't own it yet"),
+    Triple(PileState.DROPPED, "RETIRED", "Letting this one go"),
+)
+
+/**
+ * The single place a game's state changes from PILE.
+ *
+ * Every destination is listed with what it means, and the game's current state is shown as a
+ * disabled row rather than hidden — so the list doesn't reshuffle depending on where the game
+ * already is, and "where is this game now?" is answerable without leaving the sheet.
+ */
 @Composable
 private fun PileActionMenu(
     entry: PileEntryWithGame,
     stacks: List<com.mikhilnaika.continueapp.core.data.entity.StackEntity>,
     onDismiss: () -> Unit,
-    onMarkComplete: () -> Unit,
-    onDrop: () -> Unit,
-    onBackToPile: () -> Unit,
+    onMove: (PileState) -> Unit,
     onToggleStack: (Long) -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(entry.name) },
         text = {
-            Column {
-                if (entry.state == PileState.PLAYING) {
-                    TextButton(onClick = onMarkComplete) { Text("MARK COMPLETE") }
-                }
-                if (entry.state != PileState.DROPPED) {
-                    TextButton(onClick = onDrop) { Text("RETIRE") }
-                }
-                if (entry.state != PileState.BACKLOG) {
-                    TextButton(onClick = onBackToPile) { Text("BACK TO THE PILE") }
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    text = "MOVE TO",
+                    style = ContinueTextStyles.label,
+                    color = ContinueColors.TextTertiary,
+                )
+                MOVE_TARGETS.forEach { (target, label, description) ->
+                    val isCurrent = entry.state == target
+                    TextButton(
+                        onClick = { onMove(target) },
+                        enabled = !isCurrent,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isCurrent) "$label  ·  CURRENT" else label,
+                                style = ContinueTextStyles.body,
+                                color = if (isCurrent) ContinueColors.TextTertiary else ContinueColors.AccentCoin,
+                            )
+                            Text(
+                                text = description,
+                                style = ContinueTextStyles.label,
+                                color = ContinueColors.TextTertiary,
+                            )
+                        }
+                    }
                 }
                 if (stacks.isNotEmpty()) {
-                    Text(text = "ADD TO STACK", style = ContinueTextStyles.label, color = ContinueColors.TextTertiary, modifier = Modifier.padding(top = ContinueSpacing.SM.dp))
+                    Text(
+                        text = "ADD TO STACK",
+                        style = ContinueTextStyles.label,
+                        color = ContinueColors.TextTertiary,
+                        modifier = Modifier.padding(top = ContinueSpacing.SM.dp),
+                    )
                     stacks.forEach { stack ->
-                        TextButton(onClick = { onToggleStack(stack.stackId) }) { Text("${stack.emoji.orEmpty()} ${stack.name}".trim()) }
+                        TextButton(onClick = { onToggleStack(stack.stackId) }) {
+                            Text("${stack.emoji.orEmpty()} ${stack.name}".trim())
+                        }
                     }
                 }
             }

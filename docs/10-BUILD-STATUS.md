@@ -5,28 +5,254 @@
 > what's next. Update it whenever you finish a chunk of work or discover something that
 > changes this picture — don't let it go stale like a comment nobody re-reads.
 >
-> Last updated: 2026-08-06, end of the Phase 2 build session.
+> Last updated: 2026-08-12 — the "no games anywhere" fix, then a first round of real
+> device-feedback fixes on top of it. **Mikhil has now tapped through PILE, DISCOVER, search,
+> the rewarded ad, and the share target on a real device.** Still never exercised on glass:
+> the DRAW lever, swipe cards, Credits Roll, RANK, and Stacks.
+
+---
+
+## 2026-08-12 (last) — security audit before making the repo public
+
+Full pass ahead of pushing to the public GitHub repo. **Findings and fixes are written up in
+`docs/12-SECURITY.md`** — read that, not this summary, before touching the Worker or secrets.
+
+- **Secrets: clean.** No secret file has *ever* been committed (whole-history scan). Every live
+  secret file is gitignored. The only secret-shaped strings in history are the RevenueCat
+  *public* key and `getProperty("storePassword")` call sites.
+- **The Worker had no abuse controls at all** — a public, unauthenticated endpoint on free-tier
+  quotas. The binding constraint is **KV writes: 1,000/day**; one uncached search is one write,
+  so ~1,000 scripted queries would have killed caching for the day and dumped everything onto
+  IGDB. Added three rate limiters (per-IP, a tighter one for the 6x-amplifying `/resolve`, and
+  an account-wide backstop against distributed abuse), amplification caps, and input/body size
+  limits.
+- **Real SSRF fixed.** `/resolve` fetches client-supplied URLs and gated them with
+  `hostname.includes("tiktok.com")` — so `vm.tiktok.com.attacker.example` passed and could have
+  aimed our server-side fetch at any host. Now dot-anchored matching, https-only, with tests.
+- **`/steam/owned` was the worst amplifier**: unbounded `Promise.all` over a whole Steam
+  library turned one request into thousands of IGDB searches. Capped at 100, sequential.
+- **CORS `*` removed** (it let any web page use us as a free games API) and internal error
+  messages no longer leak to clients.
+- **Android:** `usesCleartextTraffic="false"` added. Backup rules confirmed to exclude
+  DataStore, so backup/restore can't duplicate coins.
+
+> **Repeat of a lesson this project keeps learning:** the first rate-limiter deploy **silently
+> did nothing** — wrangler v3 ignores `[[ratelimits]]` without warning, and 150/150 requests
+> still returned `200`. Only firing real traffic caught it. Fixed by upgrading to wrangler v4
+> (needs `@cloudflare/workers-types@5` in the same install). Same shape as the IGDB `category`
+> bug: **config that looks applied but isn't.** Always verify with traffic, never with source.
+
+Worker test count is now **28** (added `test/security.test.ts`).
+
+---
+
+## 2026-08-12 (later) — first real device-feedback pass, six fixes
+
+Mikhil tested the `versionCode 1` build against the fixed Worker and reported six things. All
+six are fixed; this is the first round of changes driven by someone actually using the app.
+
+1. **Tapping a game in PILE silently teleported it to NOW PLAYING.** A BACKLOG card's `onClick`
+   called `moveToPlaying` directly, so the card just vanished from the list with no
+   confirmation and no visible undo — it read as a bug, not an action. Both tap and long-press
+   now open the same **MOVE TO** chooser offering all five states (NOW PLAYING / CLEARED / THE
+   PILE / WANTED / RETIRED), each with a one-line description, with the game's current state
+   shown as a disabled row rather than hidden so the list never reshuffles. CLEARED still
+   routes through the Credits Roll, and NOW PLAYING still routes through `moveToPlaying` so
+   the cap-of-3 swap prompt survives. All five `PileState` values already existed — only the
+   menu was incomplete.
+2. **Coin balance was invisible.** `CoinCounter` existed but was never placed. It's now in a
+   top bar in `ArcadeScaffold` (plus a `PRO` badge), fed by a new `AppChromeViewModel`, and
+   hidden on the same immersive routes as the bottom bar.
+3. **Rewarded ad played but granted nothing** — `RealBillingRepository.earnCoins()` and
+   `spendCoins()` both returned a hardcoded `SpendResult.Error` about missing server-side
+   verification, so the entire coin economy was dead in release builds. Now backed by a real
+   on-device `CoinLedger` (DataStore). See §Coins below for why local is the right call.
+4. **Share target matched nothing from a YouTube title** — the big one, see §Share matching.
+5. **Manual-entry field prefilled a whole video caption** with no way to clear it. Added a
+   trailing clear icon and a placeholder.
+6. **IGDB partnership reply arrived.** IGDB confirmed we're a commercial use and asked seven
+   questions to start a (free) agreement. See `docs/11-IGDB-PARTNERSHIP.md`.
+
+**Also fixed, unprompted — an actual compliance gap:** the mandatory IGDB attribution existed
+only on the YOU tab, which shows *no* IGDB data, while DISCOVER (search results, both rails,
+all cover art) had none. Attribution added to DISCOVER. This is contractual under the
+partnership terms, not cosmetic.
+
+**AdMob ad unit ids are now `BuildConfig` values** (`ADMOB_UNIT_COIN`,
+`ADMOB_UNIT_FREE_PLAY`) read from `local.properties`, defaulting to Google's public test
+units. Real units exist but won't fill ads until the app is live on Play, so test units stay
+correct for now — and the switch is a config edit, not a code change.
+
+### Share matching — why it failed and what changed
+
+Measured against the live IGDB API, **`search` is near-exact, not fuzzy**:
+
+| Query | Results |
+|---|---|
+| `Each Pal has their own method of transporting items Pocketpair Palworld` | 0 |
+| `Pocketpair Palworld` | **0** |
+| `Palworld` | 3 |
+| `a tale of two bush ganks League of Legends` | 0 |
+| `League of Legends` | 11 |
+
+One extra word kills the query. We were sending IGDB the entire caption, so it essentially
+never matched — even though the game's name was sitting right there in the string.
+
+New `worker/src/resolve/candidates.ts` builds an **ordered shortlist of substrings** to try
+(hashtags → whole capitalized runs → windows inside those runs → trailing n-grams → the full
+caption), and `resolveGame` searches the top 6 with an early exit. Crucially, every hit is
+scored by `verifyAgainstText` — **does this game's name actually appear as whole words in the
+original caption?** — which is what makes searching a single word like `"Palworld"` safe.
+Longer matched names beat shorter ones, and roman numerals are folded (`III` ⇄ `3`).
+
+Verified live after deploy:
+
+| Caption | Match |
+|---|---|
+| `…items📦 Pocketpair Palworld` | **Palworld** (0.85) — beats the real game *"Pal"* |
+| `a tale of two bush ganks 🤔 League of Legends` | **League of Legends** (0.99) |
+| `Baldur's Gate 3 romance guide` | **Baldur's Gate III** (0.97) |
+| `Final Fantasy VII Rebirth is peak` | **Final Fantasy VII** (0.97) |
+| `my cat sat on the keyboard lol` | *no match → manual entry* ✅ |
+
+Resolve's searches now also go through the KV cache under the same key space as
+`/games/search`, so a share warms the search cache and vice versa — without that, one share
+could spend 6 uncached IGDB requests against a 4 req/sec ceiling.
+
+`titleParser.ts`/`TitleParser.kt` were deliberately **not** changed, so their intentional
+Kotlin/TypeScript mirroring and 13 shared test cases still hold. 9 new tests cover the new
+module, built from the two real captions captured off Mikhil's device.
+
+### Coins — deliberately on-device, and why
+
+`CoinLedger` (DataStore) is now the source of truth for the COIN balance, not RevenueCat.
+Two reasons, both structural:
+- **CLAUDE.md constraint #5 is offline-first**, and coins gate DRAW — the app's central
+  action. A server-authoritative balance makes the core loop fail on a train.
+- **RevenueCat virtual currency cannot be credited from a client at all.** Granting goes
+  through the REST API with the *secret* key, which must never ship in a public repo's APK.
+
+So: coins **earned** in-app are authoritative locally; coins **purchased** are granted by
+RevenueCat server-side and folded in via `creditPurchased`. This is not fraud-proof — clearing
+app data resets it — and that's an accepted trade-off until AdMob server-side verification is
+possible (which needs real ad units, which need a production Play listing). Everything is
+shaped so that swap changes the *source*, not any call site: features only ever talk to
+`BillingRepository`.
+
+---
+
+## 2026-08-12 — DISCOVER and search returned zero games (fixed)
+
+Mikhil installed the Internal-testing build and found **no games at all** — empty DISCOVER,
+empty search. Before IGDB was wired up, the seed set at least showed placeholder titles, so
+this was a regression. Two independent bugs stacked, and either one alone would have been
+survivable:
+
+1. **Worker (root cause).** Every list query filtered on `where category = 0`. IGDB
+   **deprecated `category` in favour of `game_type`** and stopped populating it. Filtering a
+   deprecated field is not a syntax error — IGDB answers `200 OK` with `[]`. So
+   `/games/search`, `/games/trending`, and `/games/short` all returned zero results with no
+   error anywhere. Fixed by switching to `game_type = 0`. See bug #10 in §3.
+2. **App (why it was total, not partial).** `WorkerGameDataSource` used
+   `runCatching { … }.getOrElse { seedFallback() }`. A **successful** response carrying an
+   empty list is not an exception, so the fallback never fired and 426 seeded games sat unused
+   in Room while the UI showed nothing. Fixed so empty is treated like failure. See bug #11.
+
+**Three things made this hard to see, and all three are now fixed:**
+- `/health` only asserted that credentials *existed*, so it cheerfully reported
+  `{"ok":true,"provider":"igdb"}` for a Worker serving nothing. There is now a
+  `/health?deep=1` that runs a real query and returns `ok:false` on zero results.
+- `cached()` stored the empty arrays for 6–24h, so the bug outlived its own cause. It now
+  **refuses to cache empty lists**, and cache keys are **versioned** (`CACHE_VERSION` in
+  `kv.ts`) so a query-shape change invalidates everything at once.
+- Nothing failed loudly. IGDB's error body is now included in thrown errors.
+
+**Fixed in the same pass, because the data was finally real enough to judge:**
+- **Playtimes are now populated.** Every list result carries real `hastily`/`normally`/
+  `completely` hours from `/game_time_to_beats`, fetched in **one** extra batched request per
+  list rather than one per game. They were all `null` before — which quietly starved the time
+  budget and DRAW's TIME dial, the two features that most need them.
+- **TRENDING is no longer unreleased games.** It sorted by `hypes`, which counts *pre-release*
+  follows, so a backlog app was recommending games nobody can play yet. Now: released in the
+  last 3 years, sorted by `total_rating_count`.
+- **SHORT & SWEET is now actually short.** It approximated "short" with `aggregated_rating >
+  75`, which is a quality filter wearing a length costume. Now sourced from real time-to-beat
+  data under 8 hours — returns Portal (4h), Journey (3h), Limbo (4h), Inside (4h).
+- **Removed the `PULL THE LEVER` placeholder onboarding step**, which shipped to testers
+  showing them internal text: *"is a Week 3 build (docs/06-BUILD-ROADMAP.md)"*. DRAW has been
+  fully built since 2026-08-06, so the step was stale as well as embarrassing. Onboarding now
+  ends at SEED, and **"SEARCH FOR GAMES" lands on DISCOVER** instead of dropping the user on
+  an empty PILE to find search themselves.
+
+**Verified after deploy** (real responses, not assumptions): `/health?deep=1` →
+`{"ok":true,"sampleCount":20}`; search "elden ring" → Elden Ring with cover art and 45h/119h/
+174h playtimes; trending → Clair Obscur, Silksong, Balatro; short → Portal 4h, Journey 3h.
+
+**Consequence worth knowing:** the root fix was *server-side*, so the **already-uploaded
+`versionCode 1` build now shows games without reinstalling.** The new `versionCode 2` build is
+needed only for the app-side items (empty-list fallback, onboarding cleanup).
+
+---
+
+## 2026-08-11 infra session — what changed (credentials/backend, not app code)
+
+No app code changed this session. What moved:
+- **RevenueCat dashboard fully configured** via MCP: 6 products (3 subscriptions, 3
+  consumables), 2 offerings (`default` is_current, `coins`), 6 packages, entitlement
+  attachments, COIN auto-grants. Exact ids and the required matching Play Console product
+  table are in `docs/09-PENDING-INPUTS.md`. Pricing was revised down from the original spec:
+  `continue_pro_lifetime` $39.99→$9.99, `coins_500` $6.99→$4.99.
+- **Cloudflare Worker deployed for real**, `https://continue-worker.gamestoplay.workers.dev`,
+  with Twitch secrets set — `/health` confirms the **real IGDB provider is live**, not the
+  seed fallback. This means Share Target auto-match (§ below) now actually works end-to-end.
+- **First signed release App Bundle built**: `app-release.aab` (`versionCode 1`,
+  `versionName "0.1.0"`) at `app/build/outputs/bundle/release/`, ready for Play Console
+  Internal testing upload. Not yet confirmed uploaded as of session end.
+- **Correction to the Play Store critical path**: the 12-tester/14-day closed-testing gate is
+  **per-app, not per-account** — Mikhil's other app on the same account hasn't cleared it
+  either, so CONTINUE? has no head start. This is now flagged as the single biggest schedule
+  risk — see `docs/01-PLAY-STORE-CRITICAL-PATH.md`.
+- Play Console setup (products, purchase options) was in progress when the session ended —
+  **status of the 6 Play-side products is unconfirmed**, check `docs/09-PENDING-INPUTS.md`.
 
 ---
 
 ## TL;DR
 
-**Phase 1 (Weeks 1–2) and now most of Phase 2 (Weeks 2 remainder, 3, and partial 4/5) are
-built and verified compiling, testing, and signing on the real toolchain.** This session
-added the three signature Week 3 features (DRAW, Credits Roll, pairwise ranking) in full,
-plus the Week 2 remainder (Stacks CRUD, GRID/LIST toggle, platform/genre/length filters),
-the DRAW-side economy loop from Week 4 (CONTINUE? gate, coin spend, ad-watch-for-coin, GO PRO
+**Phase 1 (Weeks 1–2) and most of Phase 2 (Weeks 2 remainder, 3, and partial 4/5) are built,
+and now confirmed running on a real device**, not just compiling. This session added the
+three signature Week 3 features (DRAW, Credits Roll, pairwise ranking) in full, plus the
+Week 2 remainder (Stacks CRUD, GRID/LIST toggle, platform/genre/length filters), the
+DRAW-side economy loop from Week 4 (CONTINUE? gate, coin spend, ad-watch-for-coin, GO PRO
 trigger — all against `Fake`/real-but-gracefully-empty billing), and a first slice of Week 5
 (YOU tab stats/trophies, one working share card). See §6 for the precise per-week ledger,
 including what's still genuinely missing in each week.
+
+**One real crash was found and fixed installing on-device** (negative `Modifier.padding` on
+the raised DRAW button — see §3 bug #9). After the fix, the app installs, launches, and the
+bottom nav bar (with DRAW button) renders without crashing on a Samsung Galaxy Tab S6 Lite.
+**That's as far as on-device verification got this session** — the app was confirmed alive
+and in the foreground (no further crash in logcat), but nobody had manually tapped through
+DRAW's lever, the swipe cards, Credits Roll, RANK, Stacks, filters, or the share card on the
+device before the session ended (context window ran long, session was wrapped up to hand off
+fresh). **A fresh session should pick up by asking Mikhil what he's tested and finish tapping
+through the rest**, fixing whatever else logcat turns up the same way bug #9 was fixed. Treat
+anything not explicitly listed as "on-device confirmed" in §2 as compile-verified only, not
+interaction-verified.
 
 **Not built this session, and worth knowing before you assume otherwise:** the STACK 3D
 "wow" view (GRID/LIST only), the RevenueCatUI paywall screen itself, FREE PLAY mode, Customer
 Center, 4 of the 5 share card types, the full Time Budget tap-to-expand visualization, and the
 clipboard nudge's actual detection logic (the settings toggle persists, but nothing watches
 the clipboard yet). None of these are blocked on credentials — they're just not built yet.
-**This build has not been re-verified on a real device this session** — only Gradle
-compile/test/assemble were run (see §2). Do that before trusting the UI is actually correct.
+
+**Also worth knowing:** the Android Share Target (docs/02-PRODUCT-SPEC.md §2a, the "share
+from YouTube/TikTok" feature) is fully built, registers correctly in the OS share sheet, and
+**its auto-match now works for real** — the Worker is deployed and, since the 2026-08-12 fix
+above, `/resolve` has actual IGDB games to match against (it was matching against nothing
+before, so every share silently fell through to manual entry). This is the headline demo
+feature and it has never been exercised on-device; worth putting near the top of the
+device-testing pass.
 
 ---
 
@@ -68,8 +294,9 @@ SDK cmdline-tools and JDK 21 installed this session.
 | `PairwiseRankerTest` (Kotlin, new) | ✅ 6/6 pass — docs/02-PRODUCT-SPEC.md §5 insertion-position math |
 | `worker/test/titleParser.test.ts` (TypeScript port) | ✅ 13/13 pass via `node --test --experimental-strip-types` (unchanged this session) |
 | Worker `tsc --noEmit` | ✅ zero errors (unchanged this session) |
-| Actual on-device run | ⚠️ **Not re-verified this session.** Last confirmed 2026-08-06 on a Galaxy Tab S6 Lite, but that was *before* all of §4b below was written. Compile/test/assemble all pass, but nobody has tapped through DRAW's lever, the swipe cards, Credits Roll, or RANK on a real screen yet — treat the interaction feel and any runtime-only bugs as unverified until that happens. |
-| `wrangler dev` (local Worker server) | ❌ Still not verified — same sandbox limitation as before, unchanged this session. |
+| Actual on-device run | ✅ **Re-verified 2026-08-06** on the same Galaxy Tab S6 Lite (device `R52W70DGYEA`) — installs, launches, no crash, process stays alive in foreground. Found and fixed one real launch-time crash in the process (bug #9 in §3). ⚠️ **But** this only confirms cold-launch-to-PILE-screen; DRAW's lever, swipe cards, Credits Roll, RANK, Stacks, filters, and the share card have **not** been manually tapped through on-device yet — do that next (see TL;DR and §8). |
+| `wrangler dev` (local Worker server) | ❌ Still not verified — same sandbox limitation as before. Not needed in practice: deploy-then-curl against the real Worker is the loop that's been working. |
+| **Deployed Worker returning real IGDB data** | ✅ **Verified 2026-08-12 against live responses.** `/health?deep=1` → `{"ok":true,"sampleCount":20}`; `/games/search?q=elden ring` → Elden Ring with cover art, 95.2 rating, 45h/119h/174h playtimes; `/games/trending` → 20 released games with covers; `/games/short` → Portal 4h, Journey 3h, Limbo 4h. |
 
 ---
 
@@ -125,6 +352,37 @@ These are worth knowing so they don't get silently reintroduced:
    renderer was rewritten to draw directly with `android.graphics.Canvas` instead (see
    `core/share/ShareCardRenderer.kt`), which has zero Compose-version risk and produces the
    identical PNG deliverable.
+9. **Real crash found on-device (2026-08-06, Phase 2 install)**: `core/ui/ArcadeScaffold.kt`
+   used `Modifier.padding(top = (-24).dp)` to visually raise the circular DRAW button above
+   the bottom nav bar. `Modifier.padding` throws `IllegalArgumentException: Padding must be
+   non-negative` on negative values — it always would have, but this code path only executes
+   once the bottom bar actually renders, and it never had during Phase 1's on-device check
+   because that check happened on the onboarding screen, which hides the bottom bar. First
+   real exercise of the bottom bar (i.e. reaching PILE) crashed on launch every time. **Fixed**
+   by switching to `Modifier.offset(y = (-24).dp)` — `offset` (unlike `padding`) explicitly
+   allows negative values and is the correct API for this kind of visual displacement.
+   Re-verified: installs, launches, reaches PILE, bottom bar with the raised DRAW button
+   renders without crashing. **Lesson**: a screen that hides its bottom bar (or any shared
+   chrome) can mask a crash in that chrome indefinitely — don't treat "onboarding works
+   on-device" as "the bottom bar works on-device already," check both explicitly.
+10. **A deprecated IGDB filter silently returned zero rows (2026-08-12).** Every Worker list
+    query used `where category = 0`; IGDB deprecated `category` in favour of `game_type` and
+    stopped populating it. **Filtering on a deprecated IGDB field returns `200 OK` with `[]`,
+    not a 4xx** — so there was no error to find, in any log, at any layer. Fixed by switching
+    to `game_type = 0` (see `MAIN_GAMES_ONLY` in `IgdbGameProvider.ts`, which now carries a
+    comment saying why). **Lesson:** a third-party filter that stops matching is invisible —
+    it looks exactly like "no results exist." When a provider deprecates a field, assume the
+    field will one day return nothing rather than erroring, and put at least one assertion on
+    *non-empty* results somewhere you'll actually see it.
+11. **`runCatching { … }.getOrElse { fallback }` does not catch an empty success
+    (2026-08-12).** `WorkerGameDataSource`'s offline-first fallback to the Room seed set only
+    fired on a thrown exception, so when the Worker returned `{"results":[]}` with a 200, the
+    app rendered nothing while 426 usable seeded games sat in the database. Fixed with an
+    explicit `.ifEmpty { seedFallback() }`. **Lesson:** "offline-first" has to include
+    "empty-first" — to a user, a healthy backend serving nothing is indistinguishable from an
+    outage, so it should degrade identically. (The rewrite also stopped swallowing
+    `CancellationException`, which `runCatching` catches and which breaks structured
+    concurrency.)
 
 ---
 
@@ -260,6 +518,16 @@ billing/ads repos in debug builds, same pattern as Phase 1.
 - `earnCoins()` (ad rewards, completion rewards) and `currentOfferingPackage()` exist on the
   interface now.
 
+**New as of 2026-08-11 — dashboard config is now complete ahead of Play Console:**
+- All 6 products, both offerings (`default` is_current, `coins`), all 6 packages, the
+  entitlement attachments, and COIN auto-grants were created via the RevenueCat MCP. They
+  read as "not found in store" until Play Console has products with the matching ids — the
+  exact id table lives in `docs/09-PENDING-INPUTS.md`. **Nothing further is needed on the
+  RevenueCat side** except uploading the Play service account JSON and building the paywall.
+- Consequence for the app: `currentOfferingPackage()` will start returning a real package
+  the moment Play products go live, with no code change. The `default` offering already
+  exists, so `getOfferings().current` is no longer null-by-configuration.
+
 **Still not real — genuine Week 4 remainder:**
 - No `PaywallView`/RevenueCatUI paywall screen anywhere — GO PRO's fallback message ("not live
   yet") is honest and correct today, but there's no actual paywall UI waiting behind it for
@@ -304,14 +572,19 @@ Nothing built or planned in the near term needs to wait for either.
 
 ## 8. Recommended next priority
 
-Two things, in order:
+Still #1, and now narrower: PILE, DISCOVER, search, the rewarded ad, and the share target have
+been exercised on a real device (2026-08-12) and their bugs fixed. **The DRAW lever, swipe
+cards, Credits Roll, RANK, and Stacks have not.** Those are the gesture/physics-heavy screens —
+exactly the ones most likely to read fine in source and feel wrong on glass.
 
-1. **Real-device verification of everything in §4b.** This session's build was verified via
-   Gradle compile/test/assemble only (all passing, including R8-minified release) — nobody has
-   actually pulled the DRAW lever, swiped a card, sat through Credits Roll, or run a RANK
-   comparison on a real screen. The gesture/physics code (drag thresholds, velocity commit,
-   spring specs) is exactly the kind of thing that reads fine in source and feels wrong on
-   glass. Do this before demoing or recording anything.
+1. **Finish real-device verification of everything in §4b.** The app now installs and reaches
+   PILE without crashing (bug #9 fixed), but that's the *start* of on-device testing, not the
+   end of it — nobody has actually pulled the DRAW lever, swiped a card, sat through Credits
+   Roll, or run a RANK comparison on a real screen yet. The gesture/physics code (drag
+   thresholds, velocity commit, spring specs) is exactly the kind of thing that reads fine in
+   source and feels wrong on glass, or crashes on an interaction path cold-launch never
+   exercises (same lesson as bug #9). Do this before demoing or recording anything. Ask
+   Mikhil what he's already tapped through before assuming a clean slate.
 2. **The STACK 3D view.** It's the one piece of Week 2/3 the design doc calls out by name as
    "the wow view" and it's the biggest visible gap left in the pile-browsing experience.
    After that, Week 4's paywall UI and Week 5's remaining share cards are the next-highest

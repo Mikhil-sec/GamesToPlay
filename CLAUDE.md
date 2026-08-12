@@ -83,6 +83,8 @@ minSdk 26 · targetSdk 36 · Compose BOM latest stable.
 | `docs/08-GAME-DATA.md` | **IGDB** auth, rate limits, queries, mood mapping, fallbacks |
 | `docs/09-PENDING-INPUTS.md` | **Living checklist** of everything still waiting on Mikhil |
 | `docs/10-BUILD-STATUS.md` | **Read first.** What's built, verified, broken, and next |
+| `docs/11-IGDB-PARTNERSHIP.md` | IGDB commercial partnership thread, draft reply, attribution obligations |
+| `docs/12-SECURITY.md` | **Read before touching the Worker, secrets, or `.gitignore`.** Threat model, what's secret vs only looks secret, API abuse controls, audit checklist |
 
 ## Working agreements
 

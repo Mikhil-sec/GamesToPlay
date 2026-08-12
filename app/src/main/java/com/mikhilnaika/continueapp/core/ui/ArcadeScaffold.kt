@@ -41,11 +41,37 @@ fun ArcadeScaffold(
     currentRoute: String?,
     onNavigate: (String) -> Unit,
     onDrawClick: () -> Unit,
+    coinBalance: Int,
+    isPro: Boolean,
     showBottomBar: Boolean = true,
     content: @Composable (Modifier) -> Unit,
 ) {
     Scaffold(
         containerColor = ContinueColors.SurfaceVoid,
+        topBar = {
+            // Shares `showBottomBar`'s visibility: the immersive routes (onboarding, Credits
+            // Roll, RANK, share card) are cinematic and must stay chrome-free.
+            if (showBottomBar) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(ContinueColors.SurfaceCabinet)
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (isPro) {
+                        Text(
+                            text = "PRO",
+                            style = ContinueTextStyles.label,
+                            color = ContinueColors.AccentCoin,
+                            modifier = Modifier.padding(end = 12.dp),
+                        )
+                    }
+                    CoinCounter(balance = coinBalance)
+                }
+            }
+        },
         bottomBar = {
             if (showBottomBar) {
                 Box(modifier = Modifier.fillMaxWidth()) {

@@ -1,7 +1,17 @@
 import type { Env, GameDto, GameProvider, ResolveCandidate, ResolveResponse } from "../types.ts";
-import { extractCandidates } from "./titleParser.ts";
+import { rankedCandidates, verifyAgainstText } from "./candidates.ts";
 import { looksLikeUrl, resolveUrlToText } from "./resolveUrl.ts";
 import { cached, CacheTtl } from "../kv.ts";
+
+/**
+ * How many provider searches one resolve may spend. IGDB allows 4 req/sec (docs/08-GAME-DATA.md)
+ * and a share must feel instant, so we try the best few guesses and stop — the ordering in
+ * `rankedCandidates` is what makes a small budget sufficient.
+ */
+const MAX_SEARCHES = 6;
+
+/** Stop early once a candidate is this convincing; more searching can't beat it. */
+const CONFIDENT_ENOUGH = 0.9;
 
 /** Very rough lexical overlap score — good enough to rank IGDB/seed search hits by how
  * closely they match a noisy candidate string, without pulling in a real fuzzy-match library. */
@@ -18,18 +28,40 @@ function scoreMatch(candidate: string, gameName: string): number {
   return overlap / Math.max(aWords.size, bWords.size, 1);
 }
 
-async function matchCandidates(candidates: string[], provider: GameProvider): Promise<ResolveCandidate[]> {
+/**
+ * Searches the ranked candidates in order and scores every hit against the **original**
+ * caption, not against the candidate that found it.
+ *
+ * That distinction is what makes short guesses safe: searching the single word `"Palworld"`
+ * is only allowed to win because the name `"Palworld"` is then confirmed to appear in the
+ * caption. Anything the caption doesn't contain falls back to weak lexical overlap and loses.
+ */
+async function matchCandidates(
+  env: Env,
+  candidates: string[],
+  provider: GameProvider,
+  originalText: string,
+): Promise<ResolveCandidate[]> {
   const scored = new Map<number, ResolveCandidate>();
-  for (const candidate of candidates) {
-    const results = await provider.search(candidate);
+  let best = 0;
+
+  for (const candidate of candidates.slice(0, MAX_SEARCHES)) {
+    // Same cache key space as `/games/search`, so a resolve warms the search cache and vice
+    // versa — without this a single share could spend 6 uncached IGDB requests.
+    const results = await cached(env, `search:${candidate.toLowerCase()}`, CacheTtl.SEARCH, () =>
+      provider.search(candidate),
+    ).catch(() => [] as GameDto[]);
     for (const game of results) {
-      const confidence = scoreMatch(candidate, game.name);
+      const verified = verifyAgainstText(originalText, game.name);
+      const confidence = verified > 0 ? verified : scoreMatch(candidate, game.name) * 0.5;
       if (confidence <= 0) continue;
       const existing = scored.get(game.id);
       if (!existing || existing.confidence < confidence) {
         scored.set(game.id, { id: game.id, name: game.name, confidence, coverUrl: game.coverUrl });
       }
+      best = Math.max(best, confidence);
     }
+    if (best >= CONFIDENT_ENOUGH) break;
   }
   return [...scored.values()].sort((a, b) => b.confidence - a.confidence).slice(0, 5);
 }
@@ -68,9 +100,13 @@ export async function resolveGame(
     return { resolvedTitle: null, source: "empty", candidates: [], needsManualEntry: true };
   }
 
-  const localCandidates = extractCandidates(resolvedTitle);
-  const searchStrings = localCandidates.length > 0 ? localCandidates : [resolvedTitle];
-  const candidates = await matchCandidates(searchStrings, provider);
+  const searchStrings = rankedCandidates(resolvedTitle);
+  const candidates = await matchCandidates(
+    env,
+    searchStrings.length > 0 ? searchStrings : [resolvedTitle],
+    provider,
+    resolvedTitle,
+  );
 
   return {
     resolvedTitle,

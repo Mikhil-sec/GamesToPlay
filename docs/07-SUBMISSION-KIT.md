@@ -142,6 +142,37 @@ likenesses · show it running on a real device · under 2:00 hard.
 
 ---
 
+## Pricing rationale — for the write-up and for judges' questions
+
+> Decided 2026-08-12. Record it here because "why is your annual tier missing?" is exactly the
+> kind of question a RevenueCat judge asks, and the honest answer is a *strategy*, not an
+> oversight.
+
+**The ladder is Monthly $3.99 and Lifetime $9.99. There is deliberately no annual tier.**
+
+An annual plan at a sane price (~$19.99) would sit *above* Lifetime, which makes it strictly
+irrational to buy — nobody rents for a year at twice the price of owning forever. Rather than
+ship a decoy nobody should pick, the tier was cut. `continue_pro_annual` was created in
+RevenueCat, then archived when the Play products were built (docs/09-PENDING-INPUTS.md).
+
+**Monthly exists mainly to make Lifetime obvious.** At $3.99/mo, Lifetime pays for itself in
+two and a half months — the comparison is instant and favours the option we actually want
+chosen. Monthly is the low-commitment on-ramp and the anchor; Lifetime is the intended
+destination.
+
+**The known trade-off, stated plainly:** this suppresses recurring revenue, which is the
+metric RevenueCat's own dashboards are built to showcase. That's an accepted cost, not an
+oversight. The bet is that a backlog manager is a *tool you own*, not a service you rent, and
+that pricing it that way converts a far higher share of a small user base. Coins and rewarded
+ads carry the ongoing-revenue side instead — which is also what makes the Catvertising thesis
+load-bearing here rather than bolted on.
+
+**If the app finds real scale, revisit.** The plan is to raise Lifetime (~$24.99) or
+reintroduce annual *only* once there's actual retention data to price against. Guessing at
+elasticity with zero users would be theatre.
+
+---
+
 ## Catvertising write-up
 
 > **The premise: in an arcade, continuing has always cost a coin.** So in CONTINUE?, a

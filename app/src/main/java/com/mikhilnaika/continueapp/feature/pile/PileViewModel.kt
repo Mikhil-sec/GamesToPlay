@@ -178,6 +178,23 @@ class PileViewModel @Inject constructor(
 
     fun backToBacklog(entryId: Long) = viewModelScope.launch { setState(entryId, PileState.BACKLOG) }
 
+    fun wishlist(entryId: Long) = viewModelScope.launch { setState(entryId, PileState.WISHLIST) }
+
+    /**
+     * Routes a chosen target state to the right transition. NOW PLAYING is deliberately not
+     * just a `setState` — it has to go through [moveToPlaying] so the cap-of-3 swap prompt
+     * still fires (docs/02-PRODUCT-SPEC.md §1).
+     */
+    fun moveTo(entryId: Long, target: PileState) {
+        when (target) {
+            PileState.PLAYING -> moveToPlaying(entryId)
+            PileState.BACKLOG -> backToBacklog(entryId)
+            PileState.COMPLETED -> complete(entryId)
+            PileState.DROPPED -> retire(entryId)
+            PileState.WISHLIST -> wishlist(entryId)
+        }
+    }
+
     suspend fun addGame(gameId: Long, source: AddSource, state: PileState = PileState.BACKLOG) {
         if (pileDao.findByGameId(gameId) != null) return
         pileDao.insert(

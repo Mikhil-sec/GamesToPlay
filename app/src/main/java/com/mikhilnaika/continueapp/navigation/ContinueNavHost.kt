@@ -5,7 +5,9 @@ import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -35,7 +37,10 @@ import com.mikhilnaika.continueapp.feature.stacks.StacksScreen
 fun ContinueNavHost(
     onboardingComplete: Boolean,
     navController: NavHostController = rememberNavController(),
+    chromeViewModel: AppChromeViewModel = hiltViewModel(),
 ) {
+    val coinBalance by chromeViewModel.coinBalance.collectAsState()
+    val isPro by chromeViewModel.isPro.collectAsState()
     val startDestination = if (onboardingComplete) NavDestinations.PILE else NavDestinations.ONBOARDING
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
@@ -55,12 +60,16 @@ fun ContinueNavHost(
             navController.navigate(route) { launchSingleTop = true }
         },
         onDrawClick = { navController.navigate(NavDestinations.DRAW) { launchSingleTop = true } },
+        coinBalance = coinBalance,
+        isPro = isPro,
         showBottomBar = showBottomBar,
     ) { padding ->
         NavHost(navController = navController, startDestination = startDestination, modifier = padding) {
             composable(NavDestinations.ONBOARDING) {
-                OnboardingScreen(onFinished = {
-                    navController.navigate(NavDestinations.PILE) {
+                OnboardingScreen(onFinished = { startAtDiscover ->
+                    val destination =
+                        if (startAtDiscover) NavDestinations.DISCOVER else NavDestinations.PILE
+                    navController.navigate(destination) {
                         popUpTo(NavDestinations.ONBOARDING) { inclusive = true }
                     }
                 })

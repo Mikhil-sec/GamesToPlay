@@ -1,5 +1,17 @@
 import type { Env } from "./types.ts";
 
+/**
+ * Bump this whenever a provider query changes shape or a bad response got cached.
+ *
+ * Earned the hard way: a deprecated IGDB filter made every list endpoint return `[]` with a
+ * 200, and `cached()` dutifully stored those empties for 6–24h — so even after the query was
+ * fixed the Worker kept serving nothing. Versioning the key space invalidates the whole cache
+ * atomically on deploy; the orphaned old keys expire on their own TTL and cost nothing.
+ *
+ * v1 → v2 (2026-08-12): `category` → `game_type`, real playtimes, rebuilt trending/short.
+ */
+const CACHE_VERSION = "v2";
+
 /** Cache-aside helper — IGDB allows only 4 req/sec, so caching is what survives a judging spike. */
 export async function cached<T>(
   env: Env,
@@ -7,13 +19,18 @@ export async function cached<T>(
   ttlSeconds: number,
   compute: () => Promise<T>,
 ): Promise<T> {
-  const hit = await env.CACHE.get(key, "json");
+  const versionedKey = `${CACHE_VERSION}:${key}`;
+  const hit = await env.CACHE.get(versionedKey, "json");
   if (hit !== null) return hit as T;
 
   const value = await compute();
+  // An empty list is almost always a symptom (bad filter, provider hiccup), not a real answer
+  // worth remembering for 24 hours. Skipping the write keeps a transient failure transient.
+  if (Array.isArray(value) && value.length === 0) return value;
+
   // waitUntil isn't available here without ctx; callers on the hot path accept the small
   // latency cost of awaiting the put so a slow KV write never drops the cache silently.
-  await env.CACHE.put(key, JSON.stringify(value), { expirationTtl: ttlSeconds });
+  await env.CACHE.put(versionedKey, JSON.stringify(value), { expirationTtl: ttlSeconds });
   return value;
 }
 

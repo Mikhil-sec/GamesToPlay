@@ -5,6 +5,7 @@ import com.mikhilnaika.continueapp.core.data.entity.GameEntity
 import com.mikhilnaika.continueapp.core.network.dto.GameDto
 import com.mikhilnaika.continueapp.core.network.dto.ResolveRequest
 import com.mikhilnaika.continueapp.core.network.dto.ResolveResponse
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import java.io.IOException
@@ -23,18 +24,45 @@ class WorkerGameDataSource @Inject constructor(
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    override suspend fun search(query: String): List<GameDto> = runCatching {
-        api.searchGames(query).results
-    }.getOrElse { fallbackSearch(query) }
+    override suspend fun search(query: String): List<GameDto> = fromWorkerOrSeed(
+        fromWorker = { api.searchGames(query).results },
+        // A genuinely unmatchable query returns empty from Room too, so falling back here
+        // can't invent bogus results — it only rescues a Worker that answered with nothing.
+        fromSeed = { fallbackSearch(query) },
+    )
 
-    override suspend fun trending(): List<GameDto> = runCatching {
-        api.trending().results
-    }.getOrElse { fallbackRandom() }
+    override suspend fun trending(): List<GameDto> = fromWorkerOrSeed(
+        fromWorker = { api.trending().results },
+        fromSeed = { fallbackRandom() },
+    )
 
-    override suspend fun shortAndSweet(): List<GameDto> = runCatching {
-        api.shortAndSweet().results
-    }.getOrElse {
-        fallbackRandom().filter { (it.playtimeHoursNormally ?: Int.MAX_VALUE) < 8 }
+    override suspend fun shortAndSweet(): List<GameDto> = fromWorkerOrSeed(
+        fromWorker = { api.shortAndSweet().results },
+        fromSeed = { fallbackRandom().filter { (it.playtimeHoursNormally ?: Int.MAX_VALUE) < 8 } },
+    )
+
+    /**
+     * Falls back to the bundled seed set when the Worker throws **or answers with an empty
+     * list**.
+     *
+     * The empty case is the one that actually bit us: a deprecated IGDB filter made the Worker
+     * return `{"results":[]}` with a `200 OK`, which `runCatching` treats as a perfectly good
+     * answer — so DISCOVER and search showed zero games on a real device while 426 seeded
+     * titles sat unused in Room. "Offline-first" has to mean "empty-first" too, because a
+     * healthy-looking backend serving nothing is indistinguishable from an outage to the user.
+     */
+    private suspend fun fromWorkerOrSeed(
+        fromWorker: suspend () -> List<GameDto>,
+        fromSeed: suspend () -> List<GameDto>,
+    ): List<GameDto> {
+        val fromNetwork = try {
+            fromWorker()
+        } catch (cancellation: CancellationException) {
+            throw cancellation // never swallow cancellation — it breaks structured concurrency
+        } catch (error: Exception) {
+            emptyList()
+        }
+        return fromNetwork.ifEmpty { fromSeed() }
     }
 
     override suspend fun resolve(text: String?, subject: String?): ResolveResponse = runCatching {

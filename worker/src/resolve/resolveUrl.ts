@@ -5,6 +5,8 @@
  * platform changes its markup, and a Worker fix ships in minutes vs. an app fix waiting on
  * Play review (docs/05-TECH-ARCHITECTURE.md).
  */
+import { hostMatches } from "../security.ts";
+
 export interface UrlResolution {
   text: string | null;
   source: string;
@@ -69,21 +71,28 @@ export async function resolveUrlToText(rawUrl: string): Promise<UrlResolution> {
     return { text: null, source: "unknown" };
   }
 
+  // Only https, and only hosts we explicitly recognise. This function performs *server-side
+  // fetches of client-supplied URLs*, so the allowlist is the SSRF boundary — anything that
+  // falls through must never be fetched.
+  if (url.protocol !== "https:") {
+    return { text: null, source: "unsupported-scheme" };
+  }
+
   const host = url.hostname.replace(/^www\./, "");
 
-  if (host === "youtube.com" || host === "youtu.be" || host === "m.youtube.com") {
+  if (hostMatches(host, "youtube.com") || hostMatches(host, "youtu.be")) {
     return resolveYoutube(url);
   }
-  if (host.includes("tiktok.com")) {
+  if (hostMatches(host, "tiktok.com")) {
     return resolveTikTok(url);
   }
-  if (host === "reddit.com") {
+  if (hostMatches(host, "reddit.com")) {
     return resolveReddit(url);
   }
-  if (host === "store.steampowered.com") {
+  if (hostMatches(host, "store.steampowered.com")) {
     return resolveSteam(url);
   }
-  if (host.includes("instagram.com")) {
+  if (hostMatches(host, "instagram.com")) {
     // Meta removed public oEmbed in April 2025 — structurally unresolvable.
     return { text: null, source: "instagram" };
   }

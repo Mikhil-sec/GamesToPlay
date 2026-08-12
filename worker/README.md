@@ -27,14 +27,19 @@ the game provider falls back to the seed set.
 
 ## Deploying for real
 
+**Order matters:** `wrangler secret put` targets an *existing* Worker, so deploy once first.
+The seed-data fallback means that first deploy is fully functional with zero secrets.
+
 ```bash
-wrangler login
-wrangler kv namespace create CACHE      # paste the returned id into wrangler.toml
-wrangler secret put TWITCH_CLIENT_ID
-wrangler secret put TWITCH_CLIENT_SECRET
-wrangler secret put STEAM_API_KEY           # optional, needed for /steam/owned
-wrangler secret put REVENUECAT_SECRET_KEY   # optional, needed for /coins/spend
-npm run deploy
+npx wrangler login
+npx wrangler kv namespace create CACHE  # paste the returned id into wrangler.toml
+npm run deploy                          # Worker now exists and serves seed data
+
+# then, once credentials exist — each `secret put` redeploys automatically
+npx wrangler secret put TWITCH_CLIENT_ID
+npx wrangler secret put TWITCH_CLIENT_SECRET
+npx wrangler secret put STEAM_API_KEY         # optional, needed for /steam/owned
+npx wrangler secret put REVENUECAT_SECRET_KEY # optional, needed for /coins/spend
 ```
 
 Then point the Android app's `local.properties` `WORKER_BASE_URL` at the deployed URL.

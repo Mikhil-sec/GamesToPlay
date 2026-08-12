@@ -6,11 +6,25 @@ import { LiveTwitchAuthClient } from "./twitch/TwitchAuthClient.ts";
 import { resolveGame } from "./resolve/resolveGame.ts";
 import { getSteamOwnedGames } from "./routes/steamOwned.ts";
 import { spendCoins } from "./routes/coinsSpend.ts";
+import { checkRateLimits, readJsonBody, sanitizeQuery, sanitizeShareText } from "./security.ts";
 
+/**
+ * No `Access-Control-Allow-Origin`, deliberately.
+ *
+ * The only intended client is a native Android app, which neither sends `Origin` nor enforces
+ * CORS — so the header buys us nothing. It previously said `*`, which let **any web page**
+ * use this Worker as a free, unattributed games API on our IGDB quota. Omitting it makes
+ * browsers refuse to read our responses cross-origin, which removes the cheapest way to
+ * freeload. (It is not a security boundary against scripted clients — rate limiting is.)
+ */
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-Content-Type-Options": "nosniff",
+      "Cache-Control": "no-store",
+    },
   });
 }
 
@@ -32,12 +46,49 @@ export default {
     const provider = selectProvider(env);
 
     try {
+      // Rate limiting runs before routing, so an unknown path costs an attacker the same
+      // budget as a real one and can't be used to probe for free. `/health` is exempt only in
+      // its shallow form — the `?deep=1` variant spends a real IGDB request, so it's gated
+      // below with everything else.
+      const isExpensive = url.pathname === "/resolve";
+      const isShallowHealth = url.pathname === "/health" && url.searchParams.get("deep") !== "1";
+      if (!isShallowHealth) {
+        const limiter = isExpensive ? env.RESOLVE_LIMITER : env.API_LIMITER;
+        const decision = await checkRateLimits(env, request, limiter);
+        if (!decision.allowed) {
+          return json(
+            {
+              error: "RATE_LIMITED",
+              scope: decision.scope,
+              message: "Too many requests — slow down and try again shortly.",
+            },
+            429,
+          );
+        }
+      }
+
       if (url.pathname === "/health") {
-        return json({ ok: true, provider: env.TWITCH_CLIENT_ID ? "igdb" : "seed" });
+        const provider_name = env.TWITCH_CLIENT_ID ? "igdb" : "seed";
+        // `?deep=1` actually runs a query instead of just asserting credentials exist. The
+        // shallow check reported a healthy "igdb" for a Worker whose every list endpoint was
+        // returning zero games (deprecated `category` filter — see IgdbGameProvider), so the
+        // one signal we had was the one that couldn't catch it. Opt-in because it spends an
+        // uncached IGDB request against the 4 req/sec ceiling.
+        if (url.searchParams.get("deep") === "1") {
+          const sample = await provider.search("zelda").catch((e: Error) => e);
+          if (sample instanceof Error) {
+            return json({ ok: false, provider: provider_name, error: sample.message }, 503);
+          }
+          return json({ ok: sample.length > 0, provider: provider_name, sampleCount: sample.length });
+        }
+        return json({ ok: true, provider: provider_name });
       }
 
       if (url.pathname === "/games/search" && request.method === "GET") {
-        const q = url.searchParams.get("q") ?? "";
+        // Length-capped before use: an over-long query would otherwise be spent on an IGDB
+        // request *and* build a KV key past KV's 512-byte limit, throwing inside `cached()`.
+        const q = sanitizeQuery(url.searchParams.get("q"));
+        if (!q) return json({ results: [] } satisfies SearchResponse);
         const results = await cached(env, `search:${q.toLowerCase()}`, CacheTtl.SEARCH, () => provider.search(q));
         return json({ results } satisfies SearchResponse);
       }
@@ -52,7 +103,9 @@ export default {
         return json({ results } satisfies SearchResponse);
       }
 
-      const detailMatch = url.pathname.match(/^\/games\/(\d+)$/);
+      // `\d{1,9}` rather than `\d+`: an arbitrarily long digit string becomes an unusable
+      // `Number` and would still cost a provider call and a KV key to discover that.
+      const detailMatch = url.pathname.match(/^\/games\/(\d{1,9})$/);
       if (detailMatch && request.method === "GET") {
         const id = Number(detailMatch[1]);
         const game = await cached(env, `detail:${id}`, CacheTtl.DETAIL, () => provider.detail(id));
@@ -60,27 +113,50 @@ export default {
       }
 
       if (url.pathname === "/resolve" && request.method === "POST") {
-        const payload = (await request.json()) as { text?: string | null; subject?: string | null };
-        const response = await resolveGame(env, provider, payload.text ?? null, payload.subject ?? null);
+        const payload = await readJsonBody<{ text?: unknown; subject?: unknown }>(request);
+        if (payload === null) return json({ error: "BAD_REQUEST" }, 400);
+        // Length-capped: `rankedCandidates` generates word windows, so cost grows with input
+        // size — an unbounded body would be a cheap way to burn Worker CPU time.
+        const response = await resolveGame(
+          env,
+          provider,
+          sanitizeShareText(payload.text),
+          sanitizeShareText(payload.subject),
+        );
         return json(response);
       }
 
       if (url.pathname === "/steam/owned" && request.method === "GET") {
-        const vanity = url.searchParams.get("vanity") ?? "";
+        const vanity = sanitizeQuery(url.searchParams.get("vanity"));
+        if (!vanity) return json({ error: "BAD_REQUEST" }, 400);
         const result = await getSteamOwnedGames(env, provider, vanity);
         return json(result.body, result.status);
       }
 
       if (url.pathname === "/coins/spend" && request.method === "POST") {
-        const payload = (await request.json()) as { appUserId: string; amount: number; sku: string };
-        const result = await spendCoins(env, payload);
+        const payload = await readJsonBody<{ appUserId?: unknown; amount?: unknown; sku?: unknown }>(request);
+        if (
+          payload === null ||
+          typeof payload.appUserId !== "string" ||
+          typeof payload.amount !== "number" ||
+          typeof payload.sku !== "string"
+        ) {
+          return json({ error: "BAD_REQUEST" }, 400);
+        }
+        const result = await spendCoins(env, {
+          appUserId: payload.appUserId.slice(0, 128),
+          amount: payload.amount,
+          sku: payload.sku.slice(0, 64),
+        });
         return json(result.body, result.status);
       }
 
       return json({ error: "NOT_FOUND" }, 404);
     } catch (error) {
+      // Log the real error for `wrangler tail`, but never return it: internal messages have
+      // leaked provider URLs and query syntax before, which is free reconnaissance.
       console.error(error);
-      return json({ error: "INTERNAL_ERROR", message: (error as Error).message }, 500);
+      return json({ error: "INTERNAL_ERROR" }, 500);
     }
   },
 };

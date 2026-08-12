@@ -18,6 +18,13 @@ Personal Google Play developer accounts created after **Nov 13, 2023** must:
 Invited-but-not-installed does **not** count. If your opted-in count drops below 12, the
 14-day clock is at risk. Organization accounts are exempt — personal accounts are not.
 
+**Correction (2026-08-11, per Mikhil's research): this gate is per-app, not per-account.**
+A second app on the same developer account does not inherit cleared production access from
+the first — each app runs its own closed test. Mikhil's other app is in internal testing on
+the same account and has not started its 14-day clock either, so CONTINUE? gets no head
+start from it. This makes the 14-day clock the single biggest schedule risk in the project —
+**start it as early as possible**, in parallel with everything else.
+
 **Consequence: the app must be uploadable to a closed track within days of the account going
 live, long before it is finished.** That's fine. The closed test measures nothing about
 quality; it just has to be a real, installable, non-crashing app.
