@@ -9,8 +9,10 @@ import type { Env } from "./types.ts";
  * atomically on deploy; the orphaned old keys expire on their own TTL and cost nothing.
  *
  * v1 → v2 (2026-08-12): `category` → `game_type`, real playtimes, rebuilt trending/short.
+ * v2 → v3 (2026-08-14): `backgroundUrl` populated from screenshots/artworks (was always null,
+ *   which left the Credits Roll upscaling a 264px cover to full screen).
  */
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v4";
 
 /** Cache-aside helper — IGDB allows only 4 req/sec, so caching is what survives a judging spike. */
 export async function cached<T>(

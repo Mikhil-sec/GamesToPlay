@@ -15,4 +15,7 @@ interface GameDataSource {
     suspend fun trending(): List<GameDto>
     suspend fun shortAndSweet(): List<GameDto>
     suspend fun resolve(text: String?, subject: String?): ResolveResponse
+
+    /** One game by IGDB id. Null when unreachable or unknown — never throws. */
+    suspend fun detail(id: Long): GameDto?
 }

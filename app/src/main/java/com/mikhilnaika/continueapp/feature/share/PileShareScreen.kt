@@ -46,8 +46,14 @@ fun PileShareScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    val bitmap by produceState(initialValue = null as android.graphics.Bitmap?, state.isLoading) {
-        if (!state.isLoading) value = ShareCardRenderer.renderPileCard(state.totalHours, state.totalGames)
+    // Compose lint's ProduceStateDoesNotAssignValue check wants exactly one unconditional
+    // `value = …` statement in the lambda body — it flagged even a `value = null` followed by
+    // an `if` containing a second assignment. The branching moved into [pileCardOrNull] so the
+    // lambda itself has nothing conditional left to misread. The old shape was functionally
+    // fine either way (isLoading flips true->false exactly once, which re-keys and reruns the
+    // producer), but the check exists because the same shape is usually a real bug.
+    val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, state.isLoading) {
+        value = pileCardOrNull(state.isLoading, state.totalHours, state.totalGames)
     }
 
     Column(
@@ -86,4 +92,9 @@ fun PileShareScreen(
             modifier = Modifier.padding(8.dp).clickable(onClick = onDismiss),
         )
     }
+}
+
+private suspend fun pileCardOrNull(isLoading: Boolean, totalHours: Int, totalGames: Int): android.graphics.Bitmap? {
+    if (isLoading) return null
+    return ShareCardRenderer.renderPileCard(totalHours, totalGames)
 }

@@ -95,8 +95,100 @@ RAWG needed several for — which helps considerably against the 4/sec ceiling.
 ```
 https://images.igdb.com/igdb/image/upload/t_{size}/{image_id}.jpg
 ```
-Sizes: `t_cover_small`, `t_cover_big`, `t_720p`, `t_1080p`.
-Use `t_cover_big` for grids, `t_720p` for hero art in the Credits Roll.
+
+The Worker stores **one** URL per game at `t_cover_big`; the app rewrites the size token per
+surface in `core/util/IgdbImage.kt`, because only the client knows how large the image will
+actually be drawn. Measured against the live CDN on 2026-08-14 for a typical cover:
+
+| token | pixels | bytes |
+|---|---|---|
+| `t_cover_big` | 264x352 | 22 KB |
+| `t_cover_big_2x` | 528x704 | 79 KB |
+| `t_720p` | 540x720 | 83 KB |
+| `t_1080p` | 810x1080 | 148 KB |
+| `t_original` | 600x800 | 173 KB |
+
+Two things that aren't obvious from the docs and cost us a round of device feedback:
+
+1. **`t_original` is often small.** The cover above only *exists* at 600x800, so `t_1080p`
+   returns an upscale, not more detail. Asking for a big cover fixes layout blur, not source
+   resolution.
+2. **A cover is the wrong image for a full-bleed background.** The Credits Roll paints art
+   across the whole screen; a 264px cover stretched that far is visibly blocky, which is what
+   testing reported. Real landscape key art comes from `screenshots` / `artworks` and is what
+   `backgroundUrl` now carries.
+
+**Prefer `screenshots` over `artworks` for `backgroundUrl`**, even though artwork is nicer
+looking. Artwork aspect ratios are unconstrained — Elden Ring's first artwork comes back from
+`t_1080p` as **1920x295**, an ultrawide banner that crops catastrophically into a portrait
+phone. Screenshots are captures and are dependably 16:9 at 1920x1080. Artwork is the fallback
+for the games that have no screenshots.
+
+### Data dumps — the accurate-matching path
+
+> **Status 2026-08-14 (later): built, run, and wired in — not just planned.** The pipeline ran
+> for real against the four dumps below, produced `app/src/main/assets/game_index.tsv.gz`
+> (17,095 games, 0.58 MB gzipped), and `ShareTargetViewModel` now tries it **before** any
+> network call. A confident offline hit skips the Worker resolve entirely. See
+> `docs/10-BUILD-STATUS.md` §The offline index is now real for the full account, including a
+> `first_release_date` encoding bug the pipeline hit and fixed.
+
+Data-dump access was **granted for our Client ID on 2026-08-14**. This is the structural fix
+for share matching, not a nice-to-have.
+
+```
+GET https://api.igdb.com/v4/dumps              -> list of available dumps
+GET https://api.igdb.com/v4/dumps/{endpoint}   -> { s3_url, endpoint, file_name, size_bytes,
+                                                    updated_at, schema_version, schema }
+```
+
+- Every endpoint is available as a **CSV**, refreshed **daily**.
+- `s3_url` is presigned and **expires after 5 minutes** — long downloads must resume with
+  `Range` and re-request the URL.
+- `schema_version` changes when the columns change; an automated pipeline has to check it.
+
+**Why this matters.** IGDB's `search` operator is near-exact. `Palworld` → 3 results;
+`Pocketpair Palworld` → **0**. A caption is never a clean title, so `/resolve` currently
+generates candidate substrings and fires up to 6 searches per share. With the name table
+local, matching is a lookup — against every name *and* every `alternative_names` row, which is
+where "BG3", "FF7" and regional titles live.
+
+**The index ships in the app, not the Worker.** Workers Free allows **10ms of CPU per
+request** (verified against Cloudflare's limits page, 2026-08-14); scanning a multi-megabyte
+index blows that on the first request into every cold isolate. The 3MB compressed script limit
+would have been survivable, the CPU ceiling is not. On a phone there's no such limit, and the
+index makes matching work with **no network at all** — which is CLAUDE.md constraint #5
+finally being true for the feature that most needs it.
+
+Pipeline: `tools/igdb_dump_index.mjs`. Joins `games` + `covers` + `alternative_names` +
+`game_time_to_beats` into `app/src/main/assets/game_index.tsv.gz`. Downloaded dumps are cached
+in `tools/.dump-cache/` (gitignored) — a re-run reuses them and only re-parses, which is why
+fixing the `first_release_date` bug below took seconds, not another 350MB download. Run
+`node tools/igdb_dump_index.mjs --inspect` before ever trusting a schema assumption — it pulls
+only the first 64KB of each dump via a ranged GET and prints the real column layout, which is
+exactly what caught the bug below. Credentials come from `worker/.dev.vars` (gitignored) or the
+environment; the secret never enters the repo or the APK (docs/12-SECURITY.md).
+
+> ⚠️ **`first_release_date` means something different in the dump than in the REST API.** The
+> API (what `IgdbGameProvider.ts` calls) returns it as a Unix timestamp. The **CSV dump**
+> returns the *same field name* as an **already-formatted datetime string**
+> (`"2023-08-15 00:00:00"`). Parsing the dump value as a timestamp doesn't throw —
+> `Number("2023-08-15…")` is `NaN`, and a `Date` built from `NaN` silently returns `NaN` from
+> `.getUTCFullYear()`, which then serializes as the literal string `"NaN"`. Found by checking
+> real output, not the docs — the same lesson as the `category`/`game_type` bug (§ above) and
+> the `backgroundUrl: null` miss, for the third time in this project. `parseDumpYear()` in the
+> indexer is now the one place that knows this. If any other field is ever pulled from the dump,
+> **verify its actual format with `--inspect` first** — don't assume it matches the REST API's.
+
+The index is loaded and matched entirely app-side: `core/offline/OfflineGameIndex.kt` parses
+the gzipped TSV from assets, and `core/util/GameNameCandidates.kt` (a Kotlin port of
+`worker/src/resolve/candidates.ts`'s ranking/verification, tested against the same fixture
+captions as `worker/test/candidates.test.ts`) does the matching — "search" is an exact
+dictionary lookup instead of an IGDB API call, since the whole name table is on the phone.
+`ShareTargetViewModel` tries this before the network path; see docs/10-BUILD-STATUS.md for the
+full wiring and what's deliberately not done yet (offline matches don't backfill
+year/rating/hours into the added `GameEntity` — the data's in the index, but that's a separate,
+pre-existing gap in the add flow, not fixed in this pass).
 
 ### Time to beat — a genuine upgrade over RAWG
 

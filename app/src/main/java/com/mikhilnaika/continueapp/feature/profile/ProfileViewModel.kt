@@ -38,6 +38,7 @@ data class ProfileUiState(
     val trophies: List<Trophy> = emptyList(),
     val hapticsEnabled: Boolean = true,
     val clipboardDetectionEnabled: Boolean = false,
+    val isPro: Boolean = false,
 )
 
 @HiltViewModel
@@ -47,6 +48,7 @@ class ProfileViewModel @Inject constructor(
     private val gameDao: GameDao,
     private val drawDao: DrawDao,
     private val userPreferencesRepository: UserPreferencesRepository,
+    billingRepository: com.mikhilnaika.continueapp.core.billing.BillingRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ProfileUiState())
@@ -69,6 +71,10 @@ class ProfileViewModel @Inject constructor(
             .onEach { (haptics, clipboard) ->
                 _state.update { it.copy(hapticsEnabled = haptics, clipboardDetectionEnabled = clipboard) }
             }.launchIn(viewModelScope)
+
+        billingRepository.isPro
+            .onEach { pro -> _state.update { it.copy(isPro = pro) } }
+            .launchIn(viewModelScope)
 
         viewModelScope.launch {
             loadThisYear()

@@ -35,12 +35,22 @@
         </activity>
 
         <!-- Transparent bottom-sheet Activity — the full app never launches for a share.
-             docs/05-TECH-ARCHITECTURE.md §Share Target implementation. -->
+             docs/05-TECH-ARCHITECTURE.md §Share Target implementation.
+
+             Launch mode is deliberately `standard` (the default, so it isn't declared).
+             `singleTask` was here and it is what made sharing from TikTok/YouTube feel like
+             *leaving* those apps: singleTask forces the activity to become the root of its own
+             task, so the system runs a task-switch animation and parks CONTINUE? in the
+             foreground rather than drawing over the caller. With `standard` the activity is
+             pushed onto the *sharing app's* task, so it reads as an overlay and Back lands the
+             user exactly where they were. `taskAffinity=""` keeps it out of the main app task
+             in the one case a caller does pass FLAG_ACTIVITY_NEW_TASK. -->
         <activity
             android:name=".feature.sharetarget.ShareTargetActivity"
             android:theme="@style/Theme.Continue.Transparent"
             android:excludeFromRecents="true"
-            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:windowSoftInputMode="adjustResize"
             android:exported="true">
             <intent-filter android:label="@string/share_target_label">
                 <action android:name="android.intent.action.SEND" />

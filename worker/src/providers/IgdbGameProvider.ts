@@ -4,8 +4,9 @@ import type { TwitchAuthClient } from "../twitch/TwitchAuthClient.ts";
 const IGDB_BASE = "https://api.igdb.com/v4";
 
 const GAME_FIELDS =
-  "name, slug, cover.image_id, first_release_date, aggregated_rating, rating, " +
-  "total_rating, total_rating_count, genres.name, themes.name, game_modes.name, platforms.name";
+  "name, slug, cover.image_id, artworks.image_id, screenshots.image_id, first_release_date, " +
+  "aggregated_rating, rating, total_rating, total_rating_count, genres.name, themes.name, " +
+  "game_modes.name, platforms.name";
 
 /**
  * `game_types` id for a standalone main game (not a DLC, bundle, port, mod, …).
@@ -22,9 +23,11 @@ const GAME_TYPE_MAIN_GAME = 0;
 /** Excludes DLC/bundles/ports and alternate editions ("Gold Edition") from every list. */
 const MAIN_GAMES_ONLY = `game_type = ${GAME_TYPE_MAIN_GAME} & version_parent = null`;
 
-interface IgdbCover {
+interface IgdbImageRef {
   image_id: string;
 }
+
+type IgdbCover = IgdbImageRef;
 
 interface IgdbNamed {
   name: string;
@@ -35,6 +38,8 @@ interface IgdbGame {
   slug: string;
   name: string;
   cover?: IgdbCover;
+  artworks?: IgdbImageRef[];
+  screenshots?: IgdbImageRef[];
   first_release_date?: number;
   aggregated_rating?: number;
   rating?: number;
@@ -55,9 +60,33 @@ interface IgdbTimeToBeat {
   count?: number;
 }
 
-/** t_cover_big for grids per docs/08-GAME-DATA.md §Covers. */
+/**
+ * t_cover_big for grids per docs/08-GAME-DATA.md §Covers.
+ *
+ * The size token is the *baseline*; the app re-writes it per surface (`IgdbImage.kt`) because a
+ * 264x352 cover blown up to a full-screen hero is visibly blocky. Keep the token here as one
+ * path segment so that rewrite stays a simple substitution.
+ */
 function coverUrl(cover?: IgdbCover): string | null {
   return cover ? `https://images.igdb.com/igdb/image/upload/t_cover_big/${cover.image_id}.jpg` : null;
+}
+
+/**
+ * Landscape key art for full-bleed backgrounds (the Credits Roll).
+ *
+ * This was hardcoded `null`, so the Credits Roll fell back to upscaling the 264px cover across
+ * a whole phone screen — the source of the "pixelated" key art.
+ *
+ * **Screenshots first, artworks second**, which is the opposite of what it looks like it should
+ * be. Artwork is prettier (promotional key art, no HUD) but its aspect ratio is unconstrained:
+ * Elden Ring's first artwork is an ultrawide banner that comes back from `t_1080p` as
+ * **1920x295**, and cropping that to fill a portrait phone upscales it ~8x — worse than the
+ * cover we were trying to replace. Screenshots are captures, so they're dependably 16:9 at
+ * 1920x1080, which crops to portrait without inventing pixels.
+ */
+function backgroundUrl(game: IgdbGame): string | null {
+  const image = game.screenshots?.[0] ?? game.artworks?.[0];
+  return image ? `https://images.igdb.com/igdb/image/upload/t_1080p/${image.image_id}.jpg` : null;
 }
 
 function secondsToHours(seconds?: number): number | null {
@@ -70,7 +99,7 @@ function toDto(game: IgdbGame, ttb?: IgdbTimeToBeat): GameDto {
     slug: game.slug,
     name: game.name,
     coverUrl: coverUrl(game.cover),
-    backgroundUrl: null,
+    backgroundUrl: backgroundUrl(game),
     released: game.first_release_date
       ? new Date(game.first_release_date * 1000).toISOString().slice(0, 10)
       : null,

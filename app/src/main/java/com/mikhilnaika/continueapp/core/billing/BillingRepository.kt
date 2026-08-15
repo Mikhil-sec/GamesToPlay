@@ -45,4 +45,22 @@ interface BillingRepository {
 
     /** The first purchasable package in the current offering, or null if none is configured yet. */
     suspend fun currentOfferingPackage(): Package?
+
+    /**
+     * Every route to PRO in the current offering, newest store prices included. Empty when no
+     * offering is configured or the store is unreachable — the paywall renders an honest
+     * "out of order" screen rather than a broken purchase button.
+     */
+    suspend fun proTiers(): List<ProTier>
+
+    /** Buys a tier returned by [proTiers], by its [ProTier.id]. */
+    suspend fun purchaseTier(activity: Activity, tierId: String): PurchaseResult
+
+    /**
+     * Re-applies entitlements already bought on this Google account.
+     *
+     * Not optional politeness: Play requires a restore path for non-consumables, and Lifetime is
+     * one. Without it, a reinstall silently loses a purchase the user actually made.
+     */
+    suspend fun restorePurchases(): PurchaseResult
 }

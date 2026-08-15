@@ -69,6 +69,9 @@ fun StacksScreen(
         if (state.stacks.isEmpty()) {
             EmptyState(
                 headline = "NO STACKS YET",
+                supporting = "A stack is your own shelf inside the pile — " +
+                    "\"Steam Deck queue\", \"Halloween horror\", \"couch co-op with Sam\". " +
+                    "A game can sit on as many shelves as you like, and the pile keeps it either way.",
                 modifier = Modifier.weight(1f),
                 action = {
                     com.mikhilnaika.continueapp.core.ui.ArcadeButton(text = "NEW STACK", onClick = { showCreateDialog = true })
@@ -103,7 +106,11 @@ fun StacksScreen(
                     }
                 }
                 if (state.selectedStackMembers.isEmpty()) {
-                    EmptyState(headline = "ADD GAMES FROM THE PILE", modifier = Modifier.weight(1f))
+                    EmptyState(
+                        headline = "ADD GAMES FROM THE PILE",
+                        supporting = "Tap any game in THE PILE, then pick this stack under ADD TO STACK.",
+                        modifier = Modifier.weight(1f),
+                    )
                 } else {
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(3),

@@ -24,6 +24,16 @@ interface GameDao {
     @Query("SELECT * FROM games WHERE name LIKE '%' || :query || '%' LIMIT :limit")
     suspend fun searchByName(query: String, limit: Int = 20): List<GameEntity>
 
+    /**
+     * Backfills key art for a game already in the pile.
+     *
+     * A targeted UPDATE rather than a REPLACE upsert on purpose: rows added before the Worker
+     * started returning `backgroundUrl` are otherwise fine, and REPLACE would delete-then-insert
+     * the row, cascading to anything referencing it.
+     */
+    @Query("UPDATE games SET backgroundUrl = :backgroundUrl WHERE id = :id")
+    suspend fun updateBackgroundUrl(id: Long, backgroundUrl: String?)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(game: GameEntity)
 

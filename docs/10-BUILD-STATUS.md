@@ -5,10 +5,327 @@
 > what's next. Update it whenever you finish a chunk of work or discover something that
 > changes this picture — don't let it go stale like a comment nobody re-reads.
 >
-> Last updated: 2026-08-12 — the "no games anywhere" fix, then a first round of real
-> device-feedback fixes on top of it. **Mikhil has now tapped through PILE, DISCOVER, search,
-> the rewarded ad, and the share target on a real device.** Still never exercised on glass:
-> the DRAW lever, swipe cards, Credits Roll, RANK, and Stacks.
+> Last updated: 2026-08-15 — a **second phone-test feedback round** (the first build Mikhil has
+> run on both a phone and the tablet). Five items reported, all layout/ergonomics; four needed
+> work, all four are fixed below. The paywall and the new dispenser deal animation were both
+> called out as working well on glass — **those two are now device-verified**, which closes the
+> single biggest gap from the previous entry.
+>
+> **A signed `versionCode 4` / `0.4.0` `app-release.aab` is built and current** at
+> `app/build/outputs/bundle/release/` (32.4 MB, signer cert valid to 2056), carrying everything
+> below. `versionCode 3` was **never uploaded** — upload this one instead.
+> Rebuild after any further app change: `JAVA_HOME=/c/Android/jdk21/jdk-21.0.12+8 ./gradlew bundleRelease`.
+
+---
+
+## 2026-08-15 — phone vs tablet: the layout round
+
+Mikhil ran `0.3.0` on both a phone and the Galaxy Tab and reported that **the same build looks
+right on the tablet and wrong on the phone** — the second time this project has learned that a
+wide device hides an entire class of bug (see 2026-08-14 item 1, and bug #9 in §3). Everything
+here is a fix to *shared* chrome, so all of it improves the tablet too.
+
+**Confirmed working on a device, first time:** the GO PRO paywall ("looks REALLY good") and the
+card-dispenser deal animation. Offline mode was also exercised — it works, with the caveats in
+§Offline below.
+
+### 1. The coin counter was taxing every screen 52dp of header
+
+It lived in `ArcadeScaffold`'s top bar on all four tabs. On a tablet that's free; on a phone it
+pushed PILE's tabs visibly down and made the whole screen read as starting too low. It now
+appears **only on DRAW (where coins are spent) and YOU (the account screen)** —
+`ArcadeScaffold(showCoinCounter =)`, decided in `ContinueNavHost` from the current route.
+
+**The subtle part:** the top bar still renders when the counter is hidden, as a zero-content
+`Row` that consumes `WindowInsets.statusBars`. Deleting the bar outright would have been the
+obvious move and would have re-broken 2026-08-14 item 2 — the app draws edge-to-edge, so with
+no top bar the content doesn't sit *higher*, it slides *under the clock*.
+
+### 2. The raised DRAW button was never centred on its own slot
+
+On the phone the gold DRAW circle sat on top of the "DISCOVER" label. Root cause: the bar has
+**two items on the left and one on the right**, so its empty middle column is centred at
+**62.5%** of the width — but the button was `align(TopCenter)` on the whole bar, i.e. **50%**.
+It was always 12.5%-of-screen-width too far left; a tablet's 240dp-wide columns simply had room
+to absorb the error and a phone's 90dp ones did not.
+
+Fixed by making the button a **real child of the nav Row** (a weighted `Box` in the middle
+slot), so it self-centres on its own column whatever the item counts are. It still uses
+`offset`, never `padding`, for the -24dp raise — see bug #9.
+
+Nav labels also got smaller and tighter (10sp/0.02em, `maxLines = 1`, ellipsised, clamped to
+the column). "DISCOVER" is the widest word in the bar and at a raised system font scale it
+outgrew its own column, which is what made the collision visible rather than merely present.
+
+### 3. PILE is now one scrolling surface, not a fixed header over a scrolling grid
+
+Reported on **both** devices: expanding SORT & FILTER ate the screen and you could never scroll
+*past* the filters — only the covers moved. Tabs, the time-budget bar, the action row and the
+filter chips are now **full-span items inside the LazyVerticalGrid / LazyColumn** rather than a
+`Column` wrapped around them. Same fix in both view modes; the empty state became an item too.
+
+All the lazy lists in the app (PILE, DISCOVER search, DISCOVER rails, YOU) also picked up 32dp
+of bottom `contentPadding` — the raised DRAW button overhangs the nav bar by 24dp and was
+sitting on top of the last row.
+
+### 4. DRAW's dials could crowd the lever out of existence
+
+On a phone the three dial sections wrap to eight-plus rows of chips once a pile has a realistic
+platform list, leaving the lever a pink sliver that **could not be dragged at all** — the
+signature interaction of the app, unreachable. Three changes:
+
+- The dials **collapse**, defaulting to collapsed on short screens (measured with
+  `BoxWithConstraints`, not a hardcoded phone/tablet breakpoint, so landscape is covered too).
+- When collapsed, a one-line summary (`2 HOURS · STORY · 3 PLATFORMS`) keeps the settings
+  visible — same rule as PILE's active-filter count: **hiding a control must never hide its
+  state**, or a draw comes back filtered by something the user can't see.
+- The lever is **measured before** the dials region and so always keeps its full pull height;
+  the dials scroll in whatever space is genuinely left. Collapsed, the lever centres in the
+  whole cabinet, which is the better screen anyway — one thing to do, in the middle.
+
+The pull threshold became a **fraction of the track** (0.68) instead of a hardcoded 150dp, so
+the short-screen (<560dp) 150dp track still commits at the same relative point.
+
+### Offline — covers now survive it
+
+Mikhil's offline pass found the pile works but **no cover art loads**. Room held the games;
+every cover still went to the network, so an offline pile was a wall of grey. Two fixes:
+
+- `ContinueApplication` now implements `SingletonImageLoader.Factory` with an explicit **192MB
+  Coil disk cache** (plus a 25% memory cache and crossfade). An IGDB cover URL contains the
+  image's own hash, so a cached cover can never be stale — only ever absent.
+- `GameCard` paints the title's initial **underneath** the cover unconditionally, so a card
+  with no art yet reads as the game instead of an empty slab. It used to draw the initial only
+  when `coverUrl == null`, which is the one case that *isn't* the common one.
+
+This does not make first-ever-seen covers appear offline — nothing can — and offline search is
+still limited to the on-device index, which Mikhil correctly judged acceptable.
+
+**Verified:** `assembleDebug` + `test` green (both variants), `bundleRelease` signed as
+`versionCode 4`. **Not verified on a device — `adb devices` was empty for this whole session.**
+Every item above is a layout change reasoned from the screenshots, so the next device run
+should start on a *phone*, on PILE and DRAW.
+
+---
+
+## 2026-08-14 (later) — the offline index is now real, and wired in
+
+Continuation of the same day's session. `TWITCH_CLIENT_SECRET` was pasted into
+`worker/.dev.vars` (created earlier this session, previously blocked on this one paste) and
+`node tools/igdb_dump_index.mjs` was run for real.
+
+**One bug found immediately, fixed before shipping anything:** the built index's `year` column
+was the literal string `"NaN"` for every row. Cause: the CSV data dump encodes
+`first_release_date` as an **already-formatted datetime string** (`"2023-08-15 00:00:00"`),
+while the REST API (what `IgdbGameProvider.ts` talks to) returns the **same field name** as a
+Unix timestamp. The indexer copied the REST-API parsing (`Number(value) * 1000` into `Date`),
+which doesn't throw on a non-numeric string — `Number("2023-08-15…")` is `NaN`, and `new
+Date(NaN).getUTCFullYear()` silently returns `NaN`, which then serializes as the string "NaN".
+Exactly the shape of bug this project has now hit three times (see bug #10 in §3 below, and the
+`backgroundUrl: null` miss from earlier today): **a field with the same name means a different
+encoding on a different surface, and nothing errors when you get it wrong.** Fixed in
+`tools/igdb_dump_index.mjs`'s new `parseDumpYear()`, which is now the one place in the repo
+that knows the dump's date format differs from the API's. Rebuilt after the fix: **0 rows** with
+"NaN" confirmed by direct check of the output file.
+
+**What the pipeline actually produced**, downloading all four dumps for real (~350MB total,
+resumed cleanly through the 5-minute presigned-URL expiry, no sandbox issues this time):
+
+| Dump | Size | Rows kept |
+|---|---|---|
+| `games` | 289.8 MB | 17,095 (of 372,146 scanned — `game_type=0`, no version parent, ≥3 ratings) |
+| `covers` | 41.0 MB | 332,444 indexed |
+| `alternative_names` | 18.4 MB | 24,398 attached |
+| `game_time_to_beats` | 0.9 MB | 7,362 indexed |
+
+Output: `app/src/main/assets/game_index.tsv.gz`, **0.58 MB gzipped** — a trivial APK-size cost
+for 17k games' worth of exact + alternative-name matching.
+
+### Wired into the app, not left as a built-but-unused asset
+
+Building the index was necessary but not sufficient — the point was to fix share matching, and
+that meant actually replacing the matching path. New:
+
+- **`core/util/GameNameCandidates.kt`** — Kotlin port of `worker/src/resolve/candidates.ts`'s
+  `rankedCandidates()`/`verifyAgainstText()`/`normalize()`. This logic had no prior Kotlin
+  mirror (only `titleParser.ts`'s candidate *extraction* was ported, as `TitleParser.kt`,
+  deliberately left unchanged this session). Kept behaviourally identical to the TS on purpose:
+  9 tests in `GameNameCandidatesTest.kt` mirror `worker/test/candidates.test.ts` line for line,
+  same fixture captions (`PALWORLD`, `LEAGUE`), same assertions.
+- **`core/offline/OfflineGameIndex.kt`** — loads the gzipped TSV from assets, builds a
+  normalized-name -> record map (every alternative name too), and mirrors `resolveGame.ts`'s
+  `matchCandidates()`: try ranked candidates in order, score every hit against the *original*
+  text (never the candidate that found it — same anti-false-positive rule as the server), stop
+  early once confident. The one structural difference from the server: "search" is an exact
+  dictionary lookup instead of an IGDB API call, because the whole dictionary is on-device now.
+  Parsing is factored into a pure `internal fun parse(InputStream)` specifically so
+  `OfflineGameIndexTest` can exercise it against the **real shipped asset file** from a plain
+  JVM test — no Android/Robolectric needed — including a regression test that fails if "NaN"
+  ever reappears in the shipped file, and a live check that `"BG3"` resolves via
+  `alternative_names` (the whole reason this pipeline exists).
+- **`ShareTargetViewModel`** now tries the offline index *first*, before any network call. A
+  confident offline hit (`GameNameCandidates.CONFIDENT_ENOUGH = 0.9`, same threshold as the
+  Worker) skips the Worker resolve entirely — **CLAUDE.md constraint #5 (offline-first) is now
+  actually true for the headline demo feature**, not just claimed for it, and shares in
+  airplane mode work. A weaker or absent offline hit falls through to the existing network
+  path, and the two candidate lists are merged by IGDB id (safe: both are the same `games`
+  table, one read via REST, one via CSV dump), keeping whichever confidence is higher per id.
+- **`OfflineGameIndex` is warmed up at app startup** (`ContinueApplication.onCreate`, same
+  pattern already used for `SeedLoader`) so decompressing ~41k rows doesn't happen on the
+  critical path of the first share.
+- **`IgdbImage.coverUrl(imageId, size)`** added — the dump's `covers` table gives a bare
+  `image_id`, not a URL, so offline matches need to build one the same way the Worker does.
+
+**Not done, and deliberately out of scope for this pass:** the offline record only carries
+`id`/`name`/`coverImageId`/`ratingCount` — not year/rating/hours, even though the index has
+them. Enriching a `GameEntity` with that data on add (for offline-matched games specifically)
+would be a real improvement over the current "bare id+name+cover, then null forever" add flow —
+but that flow is pre-existing for *every* share-added game, offline or online, so fixing it
+belongs to its own pass rather than riding along here.
+
+**Verified:** `assembleDebug` + `test` green (14 new tests, all passing, both variants), worker
+`tsc`/tests untouched and still green, `versionCode 3` `.aab` rebuilt with the new asset and
+re-signed. **Not yet verified on a device** — nobody has shared a real caption against a phone
+running this build.
+
+### An unrelated pre-existing lint error, found and (mostly) fixed while verifying
+
+Ran `./gradlew lint` as an extra check before finalizing — not previously part of this
+project's verification loop. Found one real lint **error** (not warning), pre-existing and
+unrelated to anything this session touched: `feature/share/PileShareScreen.kt`'s `produceState`
+call tripped `ProduceStateDoesNotAssignValue`. Traced it and confirmed it was **functionally
+harmless** — `PileShareViewModel`'s `isLoading` flips `true`→`false` exactly once, which re-keys
+and reruns the producer regardless — but genuinely fragile shape (a conditional-only
+`value = …` is a real bug the moment a key can change more than once, which is exactly what the
+check exists to catch). Rewrote to extract the branch into a `pileCardOrNull()` helper so the
+lambda has one unconditional assignment. **The lint error still fires on the rewritten code**,
+even after three structurally different attempts and a `--rerun-tasks` to rule out caching —
+this looks like a limitation of this lint-checker version with this particular
+`produceState<T>(initialValue=…, key)` overload/generic-argument shape, not a real bug. Left as
+a known-harmless, unresolved lint finding rather than sunk further time into it; `lint` is not
+part of the app's actual verification loop (`assembleDebug`/`test`, both green, are).
+
+---
+
+## 2026-08-14 — first phone test, the paywall, and IGDB data dumps
+
+Everything before this was tested on a Galaxy Tab S6 Lite. The first run on a phone found a
+**layout break that a tablet structurally could not surface**, which is the headline lesson of
+the session.
+
+### Nine reported items, and what changed
+
+1. **PILE's header was broken on a phone.** The five state tabs and three icon buttons shared
+   one un-scrollable `Row`. A `Row` hands leftover children zero width rather than wrapping, so
+   `NOW PLAYING` rendered as a squeezed vertical sliver and the last three tabs were
+   **unreachable entirely**. Tabs are now a full-width `horizontalScroll` strip of their own,
+   with the actions moved to their own row below.
+   **Lesson, and it rhymes with bug #9:** a wide test device can hide a layout bug indefinitely,
+   the same way a screen that hides the bottom bar hid a crash in it. Test the narrow case.
+2. **Coin counter sat under the status bar.** `enableEdgeToEdge` is on but neither bar consumed
+   insets. `ArcadeScaffold`'s top bar now takes `statusBars` padding and the nav bar takes
+   `navigationBars` padding — background first, padding second, so the cabinet colour still runs
+   edge to edge behind both.
+3. **Filters can now be collapsed** (§1 of the report). Sort + filter chips cost four rows on a
+   phone, more than the games did. They're behind a `SORT & FILTER` disclosure, collapsed by
+   default, which carries the **active-filter count** so a hidden filter can never silently
+   explain an empty-looking pile. The GRID/LIST pair also became one button showing the mode
+   you'd switch *to*, reclaiming 48dp of header.
+4. **Covers were pixelated on the DRAW card** (§2). The Worker serves one `t_cover_big` URL —
+   **264x352** — which is fine in a 3-column grid and ~3x upscaled on the DRAW card. The app now
+   rewrites the size token per surface (`core/util/IgdbImage.kt`, which carries the measured
+   size/byte table).
+5. **Credits Roll key art was much worse** (§4), and for a different reason: `backgroundUrl` was
+   **hardcoded `null`** in the Worker, so it fell back to painting that same 264px cover across
+   a whole screen. Now populated from IGDB `screenshots`/`artworks`. See §Key art below — the
+   obvious ordering of those two is the wrong one.
+6. **The share sheet had no exit** (§9). No X, no outside-tap dismiss; `windowIsFloating=false`
+   means the platform never gives you `windowCloseOnTouchOutside`, so the only way out really
+   was to kill the app. Added a scrim that dismisses on tap and an X in the header.
+7. **Sharing from TikTok/YouTube yanked the user into the app** (§8). Root cause was
+   `android:launchMode="singleTask"` on `ShareTargetActivity`: singleTask forces the activity to
+   be the root of its own task, so the system runs a task-switch animation instead of drawing
+   over the caller. Removed (back to `standard`) + `taskAffinity=""`, so the sheet is pushed
+   onto the *sharing app's* task and Back returns to the video.
+8. **The DRAW deal animation** (§3) went from three grey rectangles sliding up — which read as a
+   spinner — to cards **ejected one at a time from a dispenser slot**: squashed inside the
+   machine, sprung past their resting place, fanned on settle, with the slot pulsing as each one
+   passes. Built from transforms only, no art. A literal slot-machine reel rig was considered
+   and **not** built: it needs real art to not look cheap, and the request was explicitly "only
+   if you're confident". `DEAL_ANIMATION_MS` is now shared with `DrawViewModel` so the phase
+   can't end mid-eject the way a hardcoded 900ms would have.
+9. Everything else in the 0.2.0 build was reported working.
+
+### Key art — screenshots beat artworks, counterintuitively
+
+Artwork is promotional key art with no HUD, so it looks like the obvious pick. Its aspect ratio
+is unconstrained: Elden Ring's first artwork returns from `t_1080p` as **1920x295**, an
+ultrawide banner that upscales ~8x when cropped into a portrait phone — worse than the cover it
+replaced. Screenshots are captures and are dependably 1920x1080. So: **screenshots first,
+artworks as fallback.** Verified against live responses, not the schema.
+
+Games added before this change have `backgroundUrl == null` in Room forever, since nothing
+re-reads a game once it's in the pile. `CreditsRollViewModel` now backfills key art on demand
+via a new `/games/{id}` data-source method, after the state emit so the cinematic still starts
+on time.
+
+### The paywall is built (Week 4's biggest gap) — hand-designed, not RevenueCatUI
+
+`feature/paywall/` is a **custom Compose paywall**, reachable from the DRAW gate's GO PRO
+**and** from a new banner on YOU — previously the only route to it was exhausting the daily
+free draw, so a judge could easily never have seen it.
+
+**Why not RevenueCatUI.** It was built with RevenueCatUI first and replaced the same session.
+A dashboard-rendered paywall can be re-themed without shipping an APK, which is real value —
+but its templates can't produce the arcade cabinet this app is, and a paywall that looks like
+every other RevenueCat paywall is a bad answer in a design category. The part of the
+dashboard's value that actually mattered is kept: **prices are still read from the store at
+runtime** (`ProTier.priceFormatted` is Google's own `Price.formatted`), so a price change in
+Play Console still needs no code change, and it is localised for free.
+
+On the screen: a pulsing cabinet marquee, four perks that are each a capability the shipped
+build really has (with the free-tier limit each one removes stated, so the value is checkable),
+selectable Monthly/Lifetime tier cards, a CTA whose label follows the selection, plain-words
+subscription terms, and RESTORE PURCHASE.
+
+Three decisions worth not re-litigating:
+- **Lifetime is preselected.** Monthly exists largely to make Lifetime look obvious
+  (docs/07-SUBMISSION-KIT.md §Pricing rationale), so the default should be the one we want
+  taken — and the one that isn't a recurring charge someone has to remember to cancel.
+- **Renewal terms are on the screen, not only in the store listing.** Play policy requires it,
+  and a trial that converts silently is the fastest route to a refund and a one-star review.
+- **A cancelled purchase shows no error.** A cancel is a choice, not a failure; treating it as
+  an error is how a paywall starts feeling hostile.
+
+**`core/billing/ProTier.kt`** is the new seam: `feature/paywall` never imports a RevenueCat
+type. That is what lets `FakeBillingRepository` return convincing tiers, so **the paywall is
+fully demoable and screenshottable in a debug build**, which cannot reach Play Billing at all.
+The real implementation flattens RevenueCat's
+`Package` -> `StoreProduct` -> `SubscriptionOption` -> `PricingPhase` chain, which is also
+where the free-trial length actually lives (it is *not* on the product).
+
+`DrawViewModel.goPro()` is **gone**. It used to buy `currentOfferingPackage()` — whatever
+happened to be first in the offering — with no price shown and no choice between tiers.
+
+`restorePurchases()` was added to `BillingRepository` at the same time. Play requires a restore
+path for non-consumables and Lifetime is one; without it a reinstall silently loses a real
+purchase.
+
+### IGDB data dumps — pipeline built, not yet run
+
+Access was granted for our Client ID on 2026-08-14. `tools/igdb_dump_index.mjs` is written and
+syntax-clean but **has never been executed**, because it needs `TWITCH_CLIENT_SECRET`, which
+correctly exists only inside `wrangler secret put`. It reads from `worker/.dev.vars`
+(gitignored) — one paste unblocks it.
+
+The important architectural decision is recorded in docs/08-GAME-DATA.md: **the index ships in
+the app, not the Worker**, because Workers Free allows only **10ms of CPU per request** and
+scanning a multi-megabyte index blows that on the first request into every cold isolate.
+
+Worker changes this session: `backgroundUrl` populated, `CACHE_VERSION` v2 → v4. Deployed and
+verified against live traffic (all three rate limiters still bound). 28/28 Worker tests pass,
+`tsc --noEmit` clean, `assembleDebug` + `test` green. **Nothing in this session has been run on
+a device** — `adb devices` was empty throughout.
 
 ---
 
@@ -571,6 +888,23 @@ Nothing built or planned in the near term needs to wait for either.
 ---
 
 ## 8. Recommended next priority
+
+> **Superseded 2026-08-15 — read this first.** Current order:
+> 1. **Collect the 12+ tester emails and start the closed test.** This outranks every code item
+>    below and always will until the clock is running — 14 consecutive days, per-app, and the
+>    Shipaton deadline is 2026-09-30. Nothing in the build blocks it: `versionCode 4` is signed
+>    and sitting in `app/build/outputs/bundle/release/`.
+> 2. **Install `versionCode 4` on a *phone*** and re-check PILE (scroll past the filters) and
+>    DRAW (hide/show dials, pull the lever) — the four fixes from 2026-08-15 are layout changes
+>    that have not been seen on glass. `./gradlew installDebug` is faster for iteration, and the
+>    debug build shows a fully populated paywall via `FakeBillingRepository`.
+> 3. Still never exercised on a device at all: **RANK, Stacks, and offline share matching** (try
+>    sharing a caption in airplane mode — a confident match should resolve with no network).
+> 4. Then, in value order: the STACK 3D view, the 4 remaining share cards, store assets.
+>
+> **Closed, no longer needed:** pasting `TWITCH_CLIENT_SECRET` (done); designing a dashboard
+> paywall (hand-built, and now device-confirmed as the best-looking screen in the app).
+
 
 Still #1, and now narrower: PILE, DISCOVER, search, the rewarded ad, and the share target have
 been exercised on a real device (2026-08-12) and their bugs fixed. **The DRAW lever, swipe

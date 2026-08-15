@@ -99,7 +99,15 @@ private fun SearchResultsList(
         )
         return
     }
-    LazyColumn(contentPadding = PaddingValues(horizontal = ContinueSpacing.LG.dp)) {
+    LazyColumn(
+        contentPadding = PaddingValues(
+            start = ContinueSpacing.LG.dp,
+            end = ContinueSpacing.LG.dp,
+            // The raised DRAW button overhangs the nav bar by 24dp; without clearance the last
+            // row sits underneath it.
+            bottom = ContinueSpacing.XXL.dp,
+        ),
+    ) {
         items(results, key = { it.id }) { game ->
             SearchResultRow(game = game, isAdded = game.id in addedGameIds, onAdd = { onAdd(game) })
         }
@@ -138,7 +146,7 @@ private fun Rails(
     addedGameIds: Set<Long>,
     onAdd: (GameDto) -> Unit,
 ) {
-    LazyColumn {
+    LazyColumn(contentPadding = PaddingValues(bottom = ContinueSpacing.XXL.dp)) {
         item { Rail(title = "TRENDING NOW", games = trending, addedGameIds = addedGameIds, onAdd = onAdd) }
         item { Rail(title = "SHORT & SWEET", games = shortAndSweet, addedGameIds = addedGameIds, onAdd = onAdd) }
         item { IgdbAttribution() }

@@ -6,9 +6,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -30,7 +34,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.mikhilnaika.continueapp.core.design.ContinueColors
@@ -38,6 +44,7 @@ import com.mikhilnaika.continueapp.core.design.ContinueMotion
 import com.mikhilnaika.continueapp.core.design.ContinueSpacing
 import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
 import com.mikhilnaika.continueapp.core.util.Haptics
+import com.mikhilnaika.continueapp.core.util.IgdbImage
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 
@@ -101,36 +108,131 @@ fun DrawCardStack(
     }
 }
 
+/** How long each card takes to clear the slot before the next one is pushed out. */
+internal const val DEAL_STAGGER_MS = 190L
+
+/**
+ * How long the DEALING phase must stay on screen for the whole dispense to land.
+ *
+ * Shared with [DrawViewModel] so the two can't drift: the phase used to end on a hardcoded
+ * 900ms, which would now cut the last card off mid-eject. Three cards are always dealt during
+ * DEALING (the real picks aren't known yet), the last one starts at `2 * stagger`, and the
+ * spring needs roughly another 600ms to settle.
+ */
+internal const val DEAL_ANIMATION_MS = 2 * DEAL_STAGGER_MS + 600L
+
+/**
+ * The machine dispensing your hand — docs/02-PRODUCT-SPEC.md §3.
+ *
+ * This used to be three grey rectangles sliding up, which read as a loading spinner rather than
+ * as the cabinet doing something. Now the cards are *ejected one at a time from a slot*: each
+ * one starts inside the machine (squashed flat, behind the lip), shoots up past its resting
+ * place, and settles with a spring, while the slot flashes as it passes through.
+ *
+ * Deliberately built from transforms only — no bitmaps, no reel rig. A full slot-machine reel
+ * animation is the kind of thing that either has real art behind it or looks cheap, and there's
+ * no art budget here; a dispenser reads as mechanical *and* survives being drawn in code.
+ * Every value below is scaled off the container so it holds up on a phone and a tablet alike.
+ */
 @Composable
 private fun DealingIndicator(count: Int) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        DealingCardsRow(count)
+    BoxWithConstraints(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        val cardWidth = (maxWidth / (count + 1).coerceAtLeast(3)).coerceAtMost(96.dp)
+        val cardHeight = cardWidth * 1.4f
+        // Where the slot sits relative to the fanned cards — everything animates out of here.
+        val slotDropPx = with(LocalDensity.current) { (cardHeight + 40.dp).toPx() }
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(ContinueSpacing.SM.dp),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                repeat(count) { index ->
+                    EjectedCard(
+                        index = index,
+                        total = count,
+                        width = cardWidth,
+                        height = cardHeight,
+                        slotDropPx = slotDropPx,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.padding(top = 20.dp))
+            DispenserSlot(width = cardWidth * count + 48.dp, cardCount = count)
+        }
     }
 }
 
 @Composable
-private fun DealingCardsRow(count: Int) {
-    androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(ContinueSpacing.SM.dp)) {
-        repeat(count) { index ->
-            var visible by remember { mutableStateOf(false) }
-            LaunchedEffect(Unit) {
-                kotlinx.coroutines.delay(index * 90L)
-                visible = true
+private fun EjectedCard(index: Int, total: Int, width: Dp, height: Dp, slotDropPx: Float) {
+    var ejected by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(index * DEAL_STAGGER_MS)
+        ejected = true
+    }
+
+    // Springy rather than tweened: a card leaving a machine has momentum, and the small
+    // overshoot is what sells it as thrown instead of faded in.
+    val progress by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (ejected) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = 0.62f,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessLow,
+        ),
+        label = "eject$index",
+    )
+
+    // Fan the settled cards out from the centre so the hand doesn't read as a flat row.
+    val fanDegrees = (index - (total - 1) / 2f) * 7f
+
+    Box(
+        modifier = Modifier
+            .graphicsLayer {
+                translationY = slotDropPx * (1f - progress)
+                // Squashed while still inside the slot, full height once clear of it.
+                scaleY = 0.35f + 0.65f * progress
+                scaleX = 0.9f + 0.1f * progress
+                rotationZ = fanDegrees * progress
+                alpha = progress.coerceIn(0f, 1f)
             }
-            val offsetY by androidx.compose.animation.core.animateFloatAsState(
-                targetValue = if (visible) 0f else 120f,
-                animationSpec = ContinueMotion.card(),
-                label = "dealCard$index",
-            )
-            Box(
-                modifier = Modifier
-                    .graphicsLayer { translationY = offsetY }
-                    .size(width = 70.dp, height = 96.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(ContinueColors.SurfaceRaised),
-            )
+            .size(width = width, height = height)
+            .clip(RoundedCornerShape(8.dp))
+            .background(ContinueColors.SurfaceRaised),
+    ) {
+        // A thin lit edge so the face-down backs aren't flat blocks in the dark.
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = 6.dp, vertical = 6.dp)
+                .fillMaxWidth()
+                .height(2.dp)
+                .clip(RoundedCornerShape(1.dp))
+                .background(ContinueColors.AccentCoin.copy(alpha = 0.35f * progress)),
+        )
+    }
+}
+
+/** The lip the cards come out of. Pulses coin-yellow once per card as it passes through. */
+@Composable
+private fun DispenserSlot(width: Dp, cardCount: Int) {
+    var pulses by remember { mutableStateOf(0) }
+    LaunchedEffect(cardCount) {
+        repeat(cardCount) {
+            kotlinx.coroutines.delay(DEAL_STAGGER_MS)
+            pulses++
         }
     }
+    val glow by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (pulses > 0) 0.18f else 0.05f,
+        animationSpec = tween(140),
+        label = "slotGlow",
+    )
+    Box(
+        modifier = Modifier
+            .size(width = width, height = 10.dp)
+            .clip(RoundedCornerShape(5.dp))
+            .background(ContinueColors.AccentCoin.copy(alpha = glow)),
+    )
 }
 
 @Composable
@@ -218,7 +320,9 @@ private fun SwipeableCard(
                 Box(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.72f).background(ContinueColors.SurfaceRaised)) {
                     if (coverUrl != null) {
                         AsyncImage(
-                            model = coverUrl,
+                            // This is the biggest a cover ever gets drawn in the app — the
+                            // baseline 264px token was being upscaled ~3x here.
+                            model = IgdbImage.at(coverUrl, IgdbImage.HERO),
                             contentDescription = title,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop,

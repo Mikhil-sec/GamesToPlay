@@ -1,6 +1,7 @@
 package com.mikhilnaika.continueapp.feature.profile
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,14 +39,30 @@ import com.mikhilnaika.continueapp.core.ui.EmptyState
 @Composable
 fun ProfileScreen(
     modifier: Modifier = Modifier,
+    onGoPro: () -> Unit = {},
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
 
-    LazyColumn(modifier = modifier.fillMaxSize().padding(ContinueSpacing.LG.dp)) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize().padding(horizontal = ContinueSpacing.LG.dp),
+        // Top: the coin counter sits above this screen, so it needs its own breathing room.
+        // Bottom: the raised DRAW button overhangs the nav bar by 24dp.
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            top = ContinueSpacing.LG.dp,
+            bottom = ContinueSpacing.XXL.dp,
+        ),
+    ) {
         item {
             Text(text = "YOU", style = ContinueTextStyles.displayL, color = ContinueColors.TextPrimary)
             androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = ContinueSpacing.LG.dp))
+        }
+
+        // Until now the only way to reach the paywall was to exhaust the daily free draw, which
+        // means a judge (or a willing buyer) could easily never see it. YOU is where a user goes
+        // to look at their own account, so it's the natural second door.
+        if (!state.isPro) {
+            item { GoProBanner(onGoPro = onGoPro) }
         }
 
         item { SectionHeader("THIS YEAR") }
@@ -91,6 +108,25 @@ fun ProfileScreen(
                 color = ContinueColors.TextTertiary,
             )
         }
+    }
+}
+
+@Composable
+private fun GoProBanner(onGoPro: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(ContinueColors.SurfaceRaised)
+            .clickable(onClick = onGoPro)
+            .padding(horizontal = ContinueSpacing.LG.dp, vertical = ContinueSpacing.MD.dp),
+    ) {
+        Text(text = "▸ GO PRO", style = ContinueTextStyles.titleM, color = ContinueColors.AccentCoin)
+        Text(
+            text = "Unlimited draws · unlimited stacks · no ads",
+            style = ContinueTextStyles.label,
+            color = ContinueColors.TextSecondary,
+        )
     }
 }
 

@@ -35,6 +35,7 @@ import com.mikhilnaika.continueapp.core.design.ContinueSpacing
 import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
 import com.mikhilnaika.continueapp.core.ui.ArcadeButton
 import com.mikhilnaika.continueapp.core.util.Haptics
+import com.mikhilnaika.continueapp.core.util.IgdbImage
 import kotlinx.coroutines.delay
 
 private const val STEP_FLASH = 0
@@ -108,7 +109,10 @@ fun CreditsRollScreen(
     ) {
         if (state.backgroundUrl != null && keyArtAlpha > 0f) {
             AsyncImage(
-                model = state.backgroundUrl,
+                // Full-bleed and zoomed to 1.15x, so this is the most demanding image surface in
+                // the app. `backgroundUrl` is real 1920x1080 IGDB artwork where it exists; when
+                // the ViewModel falls back to the cover, at least ask for the largest render.
+                model = IgdbImage.at(state.backgroundUrl, IgdbImage.FULL_BLEED),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()

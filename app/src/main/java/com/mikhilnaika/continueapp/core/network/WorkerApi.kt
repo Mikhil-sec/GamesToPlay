@@ -1,5 +1,6 @@
 package com.mikhilnaika.continueapp.core.network
 
+import com.mikhilnaika.continueapp.core.network.dto.GameDto
 import com.mikhilnaika.continueapp.core.network.dto.ResolveRequest
 import com.mikhilnaika.continueapp.core.network.dto.ResolveResponse
 import com.mikhilnaika.continueapp.core.network.dto.SearchResponse
@@ -7,6 +8,7 @@ import com.mikhilnaika.continueapp.core.network.dto.SteamOwnedResponse
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 /**
@@ -23,6 +25,9 @@ interface WorkerApi {
 
     @GET("games/short")
     suspend fun shortAndSweet(): SearchResponse
+
+    @GET("games/{id}")
+    suspend fun gameDetail(@Path("id") id: Long): GameDto
 
     @POST("resolve")
     suspend fun resolve(@Body request: ResolveRequest): ResolveResponse

@@ -10,6 +10,7 @@ object NavDestinations {
     const val RANK = "rank/{gameId}"
     const val STACKS = "stacks"
     const val SHARE_PILE = "share/pile"
+    const val PAYWALL = "paywall"
 
     fun creditsRoll(entryId: Long) = "credits/$entryId"
     fun rank(gameId: Long) = "rank/$gameId"

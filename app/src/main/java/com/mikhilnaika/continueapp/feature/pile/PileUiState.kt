@@ -43,6 +43,11 @@ data class PileUiState(
     val swapPrompt: SwapPrompt? = null,
     val isLoading: Boolean = true,
 ) {
+    /** How many filters are narrowing the list — surfaced on the collapsed SORT & FILTER chip
+     * so a hidden filter can never silently explain an empty-looking pile. */
+    val activeFilterCount: Int
+        get() = listOfNotNull(platformFilter, genreFilter, lengthBucketFilter).size
+
     /** "412 HRS · 87 GAMES · FINISHED BY 2029" — docs/02-PRODUCT-SPEC.md §1. */
     val timeBudgetFinishCopy: String
         get() {

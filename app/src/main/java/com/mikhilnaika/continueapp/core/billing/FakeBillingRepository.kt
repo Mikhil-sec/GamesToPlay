@@ -39,7 +39,43 @@ class FakeBillingRepository @Inject constructor() : BillingRepository {
         return SpendResult.Success(coinBalance.value)
     }
 
-    /** No real offering exists in debug either — honest about the actual limitation rather
-     * than faking a Package the RevenueCat SDK never issued. */
+    /** Still null: faking a `Package` the RevenueCat SDK never issued would be a lie the
+     *  purchase call can't honour. [proTiers] is the honest way to make the paywall demoable. */
     override suspend fun currentOfferingPackage(): Package? = null
+
+    /**
+     * Mirrors the real `default` offering (docs/09-PENDING-INPUTS.md) so the paywall can be
+     * designed, screenshotted and reviewed in a debug build, which can't reach Play Billing.
+     *
+     * Prices here are the ones configured in Play Console. They are **display-only in debug**
+     * and are never charged — [purchaseTier] just flips the flag. If pricing changes, the real
+     * paywall follows automatically because it reads `Price.formatted` from the store; only
+     * this fake needs a manual edit, which is the correct place for the drift to sit.
+     */
+    override suspend fun proTiers(): List<ProTier> = listOf(
+        ProTier(
+            id = "\$rc_monthly",
+            label = "MONTHLY",
+            priceFormatted = "$3.99",
+            cadence = "per month",
+            freeTrialDays = 7,
+            isLifetime = false,
+        ),
+        ProTier(
+            id = "\$rc_lifetime",
+            label = "LIFETIME",
+            priceFormatted = "$9.99",
+            cadence = null,
+            freeTrialDays = null,
+            isLifetime = true,
+        ),
+    )
+
+    override suspend fun purchaseTier(activity: Activity, tierId: String): PurchaseResult {
+        isPro.value = true
+        return PurchaseResult.Success
+    }
+
+    override suspend fun restorePurchases(): PurchaseResult =
+        if (isPro.value) PurchaseResult.Success else PurchaseResult.Error("Nothing to restore in debug.")
 }

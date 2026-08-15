@@ -15,6 +15,8 @@ import com.mikhilnaika.continueapp.core.data.entity.GameEntity
 import com.mikhilnaika.continueapp.core.data.entity.PileEntryEntity
 import com.mikhilnaika.continueapp.core.network.GameDataSource
 import com.mikhilnaika.continueapp.core.network.dto.ResolveCandidateDto
+import com.mikhilnaika.continueapp.core.offline.OfflineGameIndex
+import com.mikhilnaika.continueapp.core.util.GameNameCandidates
 import com.mikhilnaika.continueapp.core.util.TitleParser
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -38,6 +40,7 @@ class ShareTargetViewModel @Inject constructor(
     private val gameDataSource: GameDataSource,
     private val gameDao: GameDao,
     private val pileDao: PileDao,
+    private val offlineGameIndex: OfflineGameIndex,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<ShareResolutionState>(ShareResolutionState.Loading)
@@ -69,17 +72,54 @@ class ShareTargetViewModel @Inject constructor(
 
     private suspend fun resolveAgainstWorker(text: String?, subject: String?) {
         // Local candidate extraction happens first so the manual-entry prefill is always the
-        // cleanest available text even if the network call below fails outright.
+        // cleanest available text even if everything below fails outright.
         val localCandidates = TitleParser.extractCandidates(text ?: subject)
         val bestLocalGuess = localCandidates.firstOrNull() ?: text
+        val original = text ?: subject
+
+        // Offline-first (docs/08-GAME-DATA.md §Data dumps): the on-device index can answer
+        // instantly with zero network, so it always runs first. A confident hit skips the
+        // Worker call entirely — this is CLAUDE.md constraint #5 actually holding for the
+        // headline demo feature, not just claimed for it.
+        val offlineMatches = runCatching { offlineGameIndex.match(original) }.getOrElse { emptyList() }
+
+        if ((offlineMatches.firstOrNull()?.confidence ?: 0f) >= GameNameCandidates.CONFIDENT_ENOUGH) {
+            _state.value = classify(
+                resolvedTitle = original,
+                candidates = offlineMatches,
+                needsManualEntry = false,
+                rawText = original ?: bestLocalGuess,
+            )
+            return
+        }
 
         val response = gameDataSource.resolve(text = text, subject = subject)
+        val merged = mergeCandidates(offlineMatches, response.candidates)
         _state.value = classify(
             resolvedTitle = response.resolvedTitle,
-            candidates = response.candidates,
-            needsManualEntry = response.needsManualEntry,
+            candidates = merged,
+            needsManualEntry = merged.isEmpty(),
             rawText = response.resolvedTitle ?: bestLocalGuess ?: text,
         )
+    }
+
+    /**
+     * Combines offline and network candidates by IGDB id — safe because both sides are real
+     * IGDB game ids from the same `games` table, one read from the REST API, one from the CSV
+     * dump. Keeps the higher-confidence entry per id, so a weak offline hit never shadows a
+     * strong network one or vice versa.
+     */
+    private fun mergeCandidates(
+        offline: List<ResolveCandidateDto>,
+        network: List<ResolveCandidateDto>,
+    ): List<ResolveCandidateDto> {
+        val byId = LinkedHashMap<Long, ResolveCandidateDto>()
+        for (candidate in network) byId[candidate.id] = candidate
+        for (candidate in offline) {
+            val existing = byId[candidate.id]
+            if (existing == null || existing.confidence < candidate.confidence) byId[candidate.id] = candidate
+        }
+        return byId.values.sortedByDescending { it.confidence }.take(5)
     }
 
     private suspend fun recognizeText(imageUri: Uri): String? = suspendCancellableCoroutine { cont ->

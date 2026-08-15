@@ -8,16 +8,25 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -32,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.mikhilnaika.continueapp.core.design.ContinueColors
 import com.mikhilnaika.continueapp.core.design.ContinueShapes
@@ -89,16 +99,52 @@ class ShareTargetActivity : ComponentActivity() {
 private fun ShareSheet(viewModel: ShareTargetViewModel, onDismiss: () -> Unit) {
     val resolution by viewModel.state.collectAsState()
 
-    Box(modifier = Modifier.padding(top = 120.dp)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            // The scrim is the outside-tap dismiss. `windowIsFloating=false` means the platform
+            // won't hand us `windowCloseOnTouchOutside`, so without this there was genuinely no
+            // way out of the sheet if you changed your mind — see the X in the header too.
+            .background(Color.Black.copy(alpha = 0.55f))
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = onDismiss,
+            ),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = ContinueShapes.RADIUS_SHEET_TOP_DP.dp, topEnd = ContinueShapes.RADIUS_SHEET_TOP_DP.dp))
                 .background(ContinueColors.SurfaceCabinet)
+                // Swallow taps on the sheet itself so they don't fall through to the scrim and
+                // dismiss the thing the user is trying to use.
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = {},
+                )
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .imePadding()
                 .padding(24.dp),
         ) {
-            Text(text = "ADD TO CONTINUE?", style = ContinueTextStyles.titleL, color = ContinueColors.TextPrimary)
-            androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 16.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "ADD TO CONTINUE?",
+                    style = ContinueTextStyles.titleL,
+                    color = ContinueColors.TextPrimary,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Cancel — don't add this game",
+                        tint = ContinueColors.TextSecondary,
+                    )
+                }
+            }
+            androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 8.dp))
 
             when (val current = resolution) {
                 is ShareResolutionState.Loading -> LoadingRow()

@@ -7,6 +7,7 @@ import com.mikhilnaika.continueapp.core.billing.BillingRepository
 import com.mikhilnaika.continueapp.core.data.PileState
 import com.mikhilnaika.continueapp.core.data.dao.GameDao
 import com.mikhilnaika.continueapp.core.data.dao.PileDao
+import com.mikhilnaika.continueapp.core.network.GameDataSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,6 +40,7 @@ class CreditsRollViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val pileDao: PileDao,
     private val gameDao: GameDao,
+    private val gameDataSource: GameDataSource,
     private val billingRepository: BillingRepository,
 ) : ViewModel() {
 
@@ -89,6 +91,23 @@ class CreditsRollViewModel @Inject constructor(
                     clearOrdinal = ordinal,
                 )
             }
+
+            if (game != null && game.backgroundUrl == null) backfillKeyArt(game.id)
         }
+    }
+
+    /**
+     * Fetches real landscape key art for a game stored before the Worker started returning it.
+     *
+     * The Credits Roll is the one screen that paints an image full-bleed, so falling back to a
+     * 264px cover is very visible — it's the "pixelated" report from device testing. Games added
+     * before 2026-08-14 have `backgroundUrl == null` in Room forever otherwise, since nothing
+     * else re-reads a game once it's in the pile. Runs *after* the state emit so the cinematic
+     * starts on time either way, and writes through to Room so it's a once-per-game cost.
+     */
+    private suspend fun backfillKeyArt(gameId: Long) {
+        val fetched = gameDataSource.detail(gameId)?.backgroundUrl ?: return
+        gameDao.updateBackgroundUrl(gameId, fetched)
+        _state.update { it.copy(backgroundUrl = fetched) }
     }
 }

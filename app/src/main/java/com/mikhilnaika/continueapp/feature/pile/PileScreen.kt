@@ -1,7 +1,9 @@
 package com.mikhilnaika.continueapp.feature.pile
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,18 +13,22 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Share
@@ -37,6 +43,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +70,9 @@ private val PILE_TABS = listOf(
     PileState.WISHLIST to "WANTED",
 )
 
+/** Enough room for the empty-state art to breathe without stealing the whole viewport. */
+private val EMPTY_STATE_HEIGHT = 240.dp
+
 @Composable
 fun PileScreen(
     modifier: Modifier = Modifier,
@@ -76,58 +86,59 @@ fun PileScreen(
     val stacksState by stacksViewModel.state.collectAsState()
     var actionMenuEntry by remember { mutableStateOf<PileEntryWithGame?>(null) }
 
-    Column(modifier = modifier.fillMaxSize()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            PileTabs(selected = state.selectedState, onSelect = viewModel::selectTab, modifier = Modifier.weight(1f))
-            IconButton(onClick = onOpenStacks) {
-                Icon(Icons.Filled.Layers, contentDescription = "Stacks", tint = ContinueColors.TextSecondary)
-            }
-            IconButton(onClick = onOpenShare) {
-                Icon(Icons.Filled.Share, contentDescription = "Share the pile", tint = ContinueColors.TextSecondary)
-            }
-            ViewModeToggle(mode = state.viewMode, onSelect = viewModel::setViewMode)
-        }
+    var controlsExpanded by rememberSaveable { mutableStateOf(false) }
 
-        TimeBudgetBar(
-            totalHours = state.totalHours,
-            totalGames = state.totalGames,
-            finishCopy = state.timeBudgetFinishCopy,
-            modifier = Modifier.padding(horizontal = ContinueSpacing.LG.dp, vertical = ContinueSpacing.SM.dp),
-        )
+    val emptyHeadline = when (state.selectedState) {
+        PileState.BACKLOG -> "INSERT GAME TO BEGIN"
+        PileState.PLAYING -> "NOTHING IN THE CABINET YET"
+        PileState.COMPLETED -> "NOTHING CLEARED YET"
+        PileState.DROPPED -> "NOTHING RETIRED"
+        PileState.WISHLIST -> "NOTHING WANTED YET"
+    }
+    val isEmpty = state.entries.isEmpty() && !state.isLoading
 
-        SortFilterRow(
-            sort = state.sort,
-            onSortSelected = viewModel::setSort,
-            modifier = Modifier.padding(horizontal = ContinueSpacing.LG.dp),
-        )
-
-        FiltersRow(
+    // Tabs, time budget, controls and filters are *items in the list*, not a fixed header above
+    // it. As a fixed header they were unscrollable dead weight: expanding the filters on a phone
+    // left the games squeezed into whatever was left (sometimes nothing), and even on a tablet
+    // you could only ever scroll the covers, never the chrome. Now the whole screen scrolls as
+    // one surface and the filters can always be scrolled past.
+    val header: @Composable () -> Unit = {
+        PileHeader(
             state = state,
+            controlsExpanded = controlsExpanded,
+            onToggleControls = { controlsExpanded = !controlsExpanded },
+            onSelectTab = viewModel::selectTab,
+            onSort = viewModel::setSort,
             onPlatform = viewModel::setPlatformFilter,
             onGenre = viewModel::setGenreFilter,
             onLengthBucket = viewModel::setLengthBucketFilter,
-            modifier = Modifier.padding(horizontal = ContinueSpacing.LG.dp),
+            onSetViewMode = viewModel::setViewMode,
+            onOpenStacks = onOpenStacks,
+            onOpenShare = onOpenShare,
         )
+    }
 
-        if (state.entries.isEmpty() && !state.isLoading) {
-            EmptyState(
-                headline = when (state.selectedState) {
-                    PileState.BACKLOG -> "INSERT GAME TO BEGIN"
-                    PileState.PLAYING -> "NOTHING IN THE CABINET YET"
-                    PileState.COMPLETED -> "NOTHING CLEARED YET"
-                    PileState.DROPPED -> "NOTHING RETIRED"
-                    PileState.WISHLIST -> "NOTHING WANTED YET"
-                },
-                modifier = Modifier.weight(1f),
-            )
-        } else if (state.viewMode == PileViewMode.GRID) {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(ContinueSpacing.LG.dp),
-                horizontalArrangement = Arrangement.spacedBy(ContinueSpacing.SM.dp),
-                verticalArrangement = Arrangement.spacedBy(ContinueSpacing.SM.dp),
-            ) {
+    if (state.viewMode == PileViewMode.GRID) {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(3),
+            modifier = modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = ContinueSpacing.LG.dp,
+                end = ContinueSpacing.LG.dp,
+                top = ContinueSpacing.SM.dp,
+                // The raised DRAW button overhangs the nav bar by 24dp, so the last row needs
+                // clearance or it sits underneath it.
+                bottom = ContinueSpacing.XXL.dp,
+            ),
+            horizontalArrangement = Arrangement.spacedBy(ContinueSpacing.SM.dp),
+            verticalArrangement = Arrangement.spacedBy(ContinueSpacing.SM.dp),
+        ) {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "header") { header() }
+            if (isEmpty) {
+                item(span = { GridItemSpan(maxLineSpan) }, key = "empty") {
+                    EmptyState(headline = emptyHeadline, modifier = Modifier.fillMaxWidth().height(EMPTY_STATE_HEIGHT))
+                }
+            } else {
                 items(state.entries, key = { it.entryId }) { entry ->
                     PileGameCard(
                         entry = entry,
@@ -140,12 +151,24 @@ fun PileScreen(
                     )
                 }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(horizontal = ContinueSpacing.LG.dp, vertical = ContinueSpacing.SM.dp),
-                verticalArrangement = Arrangement.spacedBy(ContinueSpacing.XS.dp),
-            ) {
+        }
+    } else {
+        LazyColumn(
+            modifier = modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = ContinueSpacing.LG.dp,
+                end = ContinueSpacing.LG.dp,
+                top = ContinueSpacing.SM.dp,
+                bottom = ContinueSpacing.XXL.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(ContinueSpacing.XS.dp),
+        ) {
+            item(key = "header") { header() }
+            if (isEmpty) {
+                item(key = "empty") {
+                    EmptyState(headline = emptyHeadline, modifier = Modifier.fillMaxWidth().height(EMPTY_STATE_HEIGHT))
+                }
+            } else {
                 items(state.entries, key = { it.entryId }) { entry ->
                     PileListRow(
                         entry = entry,
@@ -265,10 +288,83 @@ private fun PileActionMenu(
     )
 }
 
+/**
+ * Everything above the games, as one scrollable block: state tabs, the time budget, the
+ * action row, and the collapsible sort/filter chips.
+ */
+@Composable
+private fun PileHeader(
+    state: PileUiState,
+    controlsExpanded: Boolean,
+    onToggleControls: () -> Unit,
+    onSelectTab: (PileState) -> Unit,
+    onSort: (PileSort) -> Unit,
+    onPlatform: (String) -> Unit,
+    onGenre: (String) -> Unit,
+    onLengthBucket: (LengthBucket) -> Unit,
+    onSetViewMode: (PileViewMode) -> Unit,
+    onOpenStacks: () -> Unit,
+    onOpenShare: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // The five state tabs get a full-width scrolling strip of their own. They used to share
+        // one un-scrollable Row with three icon buttons, which fits a tablet and badly breaks a
+        // phone: Row hands the leftovers zero width, so "NOW PLAYING" rendered as a squeezed
+        // vertical sliver and the last three tabs were unreachable entirely.
+        PileTabs(selected = state.selectedState, onSelect = onSelectTab)
+
+        TimeBudgetBar(
+            totalHours = state.totalHours,
+            totalGames = state.totalGames,
+            finishCopy = state.timeBudgetFinishCopy,
+            modifier = Modifier.padding(vertical = ContinueSpacing.SM.dp),
+        )
+
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            SortFilterToggle(
+                expanded = controlsExpanded,
+                activeFilterCount = state.activeFilterCount,
+                onToggle = onToggleControls,
+            )
+            Box(modifier = Modifier.weight(1f))
+            IconButton(onClick = onOpenStacks) {
+                Icon(Icons.Filled.Layers, contentDescription = "Stacks", tint = ContinueColors.TextSecondary)
+            }
+            IconButton(onClick = onOpenShare) {
+                Icon(Icons.Filled.Share, contentDescription = "Share the pile", tint = ContinueColors.TextSecondary)
+            }
+            ViewModeToggle(mode = state.viewMode, onSelect = onSetViewMode)
+        }
+
+        // Sort and filters cost four rows of chips on a phone — more vertical space than the
+        // games themselves. Collapsed by default; the toggle carries the active-filter count so
+        // hiding them never hides *that they're on*.
+        AnimatedVisibility(visible = controlsExpanded) {
+            Column {
+                SortFilterRow(
+                    sort = state.sort,
+                    onSortSelected = onSort,
+                    modifier = Modifier.padding(vertical = ContinueSpacing.XS.dp),
+                )
+
+                FiltersRow(
+                    state = state,
+                    onPlatform = onPlatform,
+                    onGenre = onGenre,
+                    onLengthBucket = onLengthBucket,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun PileTabs(selected: PileState, onSelect: (PileState) -> Unit, modifier: Modifier = Modifier) {
     Row(
-        modifier = modifier.padding(horizontal = ContinueSpacing.LG.dp, vertical = ContinueSpacing.SM.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(vertical = ContinueSpacing.SM.dp),
         horizontalArrangement = Arrangement.spacedBy(ContinueSpacing.SM.dp),
     ) {
         PILE_TABS.forEach { (pileState, label) ->
@@ -279,6 +375,25 @@ private fun PileTabs(selected: PileState, onSelect: (PileState) -> Unit, modifie
             )
         }
     }
+}
+
+/** The disclosure for SORT & FILTER. Carries the active-filter count when collapsed. */
+@Composable
+private fun SortFilterToggle(expanded: Boolean, activeFilterCount: Int, onToggle: () -> Unit) {
+    FilterChip(
+        selected = expanded || activeFilterCount > 0,
+        onClick = onToggle,
+        label = {
+            Text(if (activeFilterCount > 0) "SORT & FILTER · $activeFilterCount" else "SORT & FILTER")
+        },
+        trailingIcon = {
+            Icon(
+                imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = if (expanded) "Hide sort and filters" else "Show sort and filters",
+                modifier = Modifier.size(18.dp),
+            )
+        },
+    )
 }
 
 @Composable
@@ -317,23 +432,19 @@ private fun PileGameCard(entry: PileEntryWithGame, onClick: () -> Unit, onLongCl
     )
 }
 
+/**
+ * One button, not two: it shows the mode you'd switch *to*. Two side-by-side icon buttons cost
+ * 96dp of a phone's header for a binary choice, and the un-picked one always read as disabled.
+ */
 @Composable
 private fun ViewModeToggle(mode: PileViewMode, onSelect: (PileViewMode) -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier = modifier.padding(end = ContinueSpacing.LG.dp)) {
-        IconButton(onClick = { onSelect(PileViewMode.GRID) }) {
-            Icon(
-                imageVector = Icons.Filled.GridView,
-                contentDescription = "Grid view",
-                tint = if (mode == PileViewMode.GRID) ContinueColors.AccentCoin else ContinueColors.TextTertiary,
-            )
-        }
-        IconButton(onClick = { onSelect(PileViewMode.LIST) }) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ViewList,
-                contentDescription = "List view",
-                tint = if (mode == PileViewMode.LIST) ContinueColors.AccentCoin else ContinueColors.TextTertiary,
-            )
-        }
+    val next = if (mode == PileViewMode.GRID) PileViewMode.LIST else PileViewMode.GRID
+    IconButton(onClick = { onSelect(next) }, modifier = modifier) {
+        Icon(
+            imageVector = if (next == PileViewMode.GRID) Icons.Filled.GridView else Icons.AutoMirrored.Filled.ViewList,
+            contentDescription = if (next == PileViewMode.GRID) "Switch to grid view" else "Switch to list view",
+            tint = ContinueColors.TextSecondary,
+        )
     }
 }
 

@@ -21,6 +21,12 @@ import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
 fun EmptyState(
     headline: String,
     modifier: Modifier = Modifier,
+    /**
+     * What the thing *is*, for empty states whose headline can't carry it alone. "NO STACKS
+     * YET" is a status, not an explanation — the first tester to reach that screen asked what
+     * stacks were for, which is a copy bug, not a feature gap.
+     */
+    supporting: String? = null,
     action: (@Composable () -> Unit)? = null,
 ) {
     Column(
@@ -36,6 +42,15 @@ fun EmptyState(
             color = ContinueColors.TextSecondary,
             textAlign = TextAlign.Center,
         )
+        if (supporting != null) {
+            androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 12.dp))
+            Text(
+                text = supporting,
+                style = ContinueTextStyles.body,
+                color = ContinueColors.TextTertiary,
+                textAlign = TextAlign.Center,
+            )
+        }
         if (action != null) {
             androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 16.dp))
             action()

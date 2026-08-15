@@ -145,26 +145,22 @@ class DrawViewModel @Inject constructor(
         }
     }
 
-    /** GATE action: RevenueCat paywall — see docs/09-PENDING-INPUTS.md, no real offering yet. */
-    fun goPro(activity: Activity) {
+    /**
+     * Called when the user comes back from the paywall, so a purchase made there takes effect
+     * immediately instead of leaving them staring at the gate they just paid to remove.
+     *
+     * The purchase itself lives in `feature/paywall` now: GO PRO used to buy
+     * `currentOfferingPackage()` — whatever happened to be first in the offering — with no price
+     * shown and no choice between Monthly and Lifetime. That was defensible when no products
+     * existed; now that they do, the dashboard-configured paywall is both the honest UI and the
+     * one that can be re-priced without an APK.
+     */
+    fun onReturnedFromPaywall() {
+        if (!_state.value.isPro || _state.value.phase != DrawPhase.GATE) return
         viewModelScope.launch {
-            _state.update { it.copy(gateBusy = true, gateError = null) }
-            val pkg = billingRepository.currentOfferingPackage()
-            if (pkg == null) {
-                _state.update {
-                    it.copy(gateBusy = false, gateError = "GO PRO isn't live yet — Play Store products land soon.")
-                }
-                return@launch
-            }
-            when (val result = billingRepository.purchase(activity, pkg)) {
-                is PurchaseResult.Success -> {
-                    countdownJob?.cancel()
-                    _state.update { it.copy(gateBusy = false) }
-                    deal()
-                }
-                is PurchaseResult.UserCancelled -> _state.update { it.copy(gateBusy = false) }
-                is PurchaseResult.Error -> _state.update { it.copy(gateBusy = false, gateError = result.message) }
-            }
+            countdownJob?.cancel()
+            _state.update { it.copy(gateBusy = false, gateError = null) }
+            deal()
         }
     }
 
@@ -193,7 +189,7 @@ class DrawViewModel @Inject constructor(
             )
         )
         result.picks.forEach { pileDao.markDrawn(it.candidate.entryId, now) }
-        delay(900) // lets the CRT power-on flicker play before cards are interactive
+        delay(DEAL_ANIMATION_MS) // let the cards finish being ejected before they're interactive
         _state.update {
             it.copy(
                 phase = DrawPhase.CARDS,

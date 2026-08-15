@@ -52,11 +52,15 @@ criteria mean by *"smart integration with the rest of your revenue stack."*
 
 **Offering:** `default`
 
+> ⚠️ **Prices below were revised 2026-08-11/12 and this table is now the corrected one.**
+> `docs/09-PENDING-INPUTS.md` holds the authoritative id/price table with the live RevenueCat
+> product ids; keep the two in step.
+
 | Package | Product id | Price | Notes |
 |---|---|---|---|
-| Monthly | `continue_pro_monthly` | $3.99 | **7-day free trial** |
-| Annual | `continue_pro_annual` | $19.99 | Best value badge, ~58% saving |
-| Lifetime | `continue_pro_lifetime` | $39.99 | Non-consumable. Gamers love owning things. |
+| Monthly | `continue_pro_monthly` | $3.99 | **7-day free trial**. Base plan id `monthly` |
+| ~~Annual~~ | ~~`continue_pro_annual`~~ | — | **Dropped.** At $9.99 lifetime, a $19.99/yr tier is strictly dominated — nobody rational buys it. Never created in Play Console; archived in RevenueCat |
+| Lifetime | `continue_pro_lifetime` | **$9.99** | Non-consumable. Gamers love owning things. Preselected on the paywall |
 
 The 7-day free trial satisfies the Shipaton requirement that judges can test premium
 features without a promo code. **Also generate a Play promo code as a backup** and include
@@ -67,17 +71,31 @@ Unlimited draws · unlimited stacks · full Steam import · all share-card theme
 skins · Year in Games · cloud backup & restore · **no ads** · 50 coins/month.
 
 ### Paywall
-Use **RevenueCat's remote paywall** (`purchases-ui-android`, `PaywallActivityLauncher` /
-`Paywall` composable) so copy, pricing emphasis, and layout can be changed from the
-dashboard **without shipping an APK** — which matters enormously when the Play review queue
-is the bottleneck. Style it to match the neo-arcade system.
+
+> **Revised 2026-08-14 — built, and not the way this section originally planned.** The plan was
+> RevenueCat's remote paywall (`purchases-ui-android`), so copy and layout could change from the
+> dashboard without shipping an APK. It was built that way first and **replaced the same day**
+> with a hand-designed Compose paywall in `feature/paywall/`.
+>
+> The reasoning: the dashboard templates cannot produce the arcade cabinet this app is, and a
+> paywall that looks like every other RevenueCat paywall is a bad answer in the Design Award
+> category — which is one of the four we're entering. The genuinely load-bearing half of the
+> original argument is preserved: **prices, cadence and trial length are read from the store at
+> runtime** (`Price.formatted`, `SubscriptionOption.freePhase`), so a Play Console price change
+> still needs no code change *and* is correctly localised. What we gave up is remote control of
+> copy and layout, which is a smaller loss than a generic-looking paywall.
+>
+> `core/billing/ProTier.kt` keeps RevenueCat types out of the paywall feature entirely, so the
+> screen is fully demoable against `FakeBillingRepository` in a debug build that cannot reach
+> Play Billing. That's what makes it possible to iterate on the design and capture submission
+> screenshots before the app is live.
 
 Paywall triggers (all soft, never a wall on launch):
-- The `CONTINUE?` screen's `GO PRO` option
-- Attempting a 3rd stack
-- The blurred remainder of a Steam import
-- A locked share theme
-- `YOU` tab → an upgrade row
+- The `CONTINUE?` screen's `GO PRO` option ✅ built
+- `YOU` tab → an upgrade banner ✅ built
+- Attempting a 3rd stack — still shows an inline message, not the paywall
+- The blurred remainder of a Steam import — not built
+- A locked share theme — not built
 
 Also integrate the **RevenueCat Customer Center** in Settings for self-serve management,
 cancellation flows, and restore. Cheap to add, and it reads as production-grade.
@@ -104,8 +122,12 @@ cancellation flows, and restore. Cheap to add, and it reads as production-grade.
 | Product id | Coins | Price |
 |---|---|---|
 | `coins_50` | 50 | $0.99 |
-| `coins_150` | 150 (+20 bonus) | $2.49 |
-| `coins_500` | 500 (+100 bonus) | $6.99 |
+| `coins_150` | **170** (150 +20 bonus) | $2.49 |
+| `coins_500` | **600** (500 +100 bonus) | **$4.99** |
+
+The coin counts are the auto-grant amounts actually configured in RevenueCat, and the id
+`coins_150` granting 170 coins is deliberate (the id names the base amount, the grant includes
+the bonus). `coins_500` was repriced from $6.99.
 
 Configure these in RevenueCat to **automatically grant currency on purchase** (products can
 be associated with a virtual currency so the balance credits without app-side logic).
@@ -131,11 +153,22 @@ be associated with a virtual currency so the balance credits without app-side lo
 - **Verify the exact v2 endpoint path and payload against current RevenueCat docs at
   implementation time** rather than trusting this document — the API surface is newer than
   most of the SDK.
-- Treat the server as the source of truth for balance. Show an optimistic local decrement
+- ⚠️ **Superseded 2026-08-12 — the shipped app does NOT do this.** The two bullets below
+  describe a server-authoritative balance. `core/data/CoinLedger.kt` (DataStore) is the source
+  of truth instead, for two structural reasons: coins gate DRAW, and CLAUDE.md constraint #5
+  requires that to work offline; and **RevenueCat virtual currency cannot be credited from a
+  client at all** — granting needs the secret key, which can never ship in a public repo's APK.
+  So coins *earned* in-app are authoritative locally and coins *purchased* are granted
+  server-side by RevenueCat and folded in via `creditPurchased`. This is not fraud-proof
+  (clearing app data resets it) and is an accepted trade-off until AdMob server-side
+  verification is possible, which needs real ad units, which needs a production Play listing.
+  Every feature talks only to `BillingRepository`, so that swap changes the source, not any
+  call site.
+- ~~Treat the server as the source of truth for balance. Show an optimistic local decrement
   for responsiveness, then reconcile; if the server rejects, roll back with a shake
-  animation and a clear message.
-- Handle the offline case: queue nothing. If a spend can't reach the server, tell the user
-  and don't grant the item. Never grant locally — that's how you build an exploit.
+  animation and a clear message.~~
+- ~~Handle the offline case: queue nothing. If a spend can't reach the server, tell the user
+  and don't grant the item. Never grant locally — that's how you build an exploit.~~
 
 ---
 
@@ -250,14 +283,15 @@ that for the submission.
 - [x] Public Android SDK key → `goog_uEkBWERrtERDlPxqQbcYpxvxXEH`
 - [x] Entitlement `pro` → `entl9d1d013bd1`
 - [x] Virtual currency `COIN`
-- [ ] Products: 3 subscriptions + 3 consumable coin packs *(blocked on Play Console — the
-      products must exist in Play before RevenueCat can sync them)*
-- [ ] Offering `default` with packages `$rc_monthly`, `$rc_annual`, `$rc_lifetime`
-- [ ] Offering `coins` with the three consumable packages
-- [ ] Virtual currency `COIN`, with the coin packs associated for auto-grant
+- [x] Products: **5 shipping** (annual deliberately dropped, see docs/09-PENDING-INPUTS.md) —
+      created in both RevenueCat and Play Console 2026-08-12
+- [x] Offering `default` with `$rc_monthly` + `$rc_lifetime` (`$rc_annual` deleted with the tier)
+- [x] Offering `coins` with the three consumable packages
+- [x] Virtual currency `COIN`, with the coin packs associated for auto-grant
 - [ ] Enable Charts v3
 - [ ] Connect AdMob; create 2 rewarded units (coins / temporary-Pro)
 - [ ] Reward rules: unit A → 1 `COIN`; unit B → `pro` entitlement for 60 minutes
-- [ ] Build and publish the paywall
+- [x] Build the paywall — **hand-built in `feature/paywall/` 2026-08-14, not a dashboard
+      paywall.** Nothing to publish; see the revised §Paywall above for why
 - [ ] Configure Customer Center
 - [ ] Store the secret API key **only** as a Cloudflare Worker secret

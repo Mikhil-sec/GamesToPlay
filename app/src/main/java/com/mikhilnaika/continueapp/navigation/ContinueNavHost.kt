@@ -21,6 +21,7 @@ import com.mikhilnaika.continueapp.feature.completion.CreditsRollScreen
 import com.mikhilnaika.continueapp.feature.discover.DiscoverScreen
 import com.mikhilnaika.continueapp.feature.draw.DrawScreen
 import com.mikhilnaika.continueapp.feature.onboarding.OnboardingScreen
+import com.mikhilnaika.continueapp.feature.paywall.PaywallScreen
 import com.mikhilnaika.continueapp.feature.pile.PileScreen
 import com.mikhilnaika.continueapp.feature.profile.ProfileScreen
 import com.mikhilnaika.continueapp.feature.rank.RankScreen
@@ -44,8 +45,21 @@ fun ContinueNavHost(
     val startDestination = if (onboardingComplete) NavDestinations.PILE else NavDestinations.ONBOARDING
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    val fullScreenRoutes = setOf(NavDestinations.ONBOARDING, NavDestinations.CREDITS_ROLL, NavDestinations.RANK, NavDestinations.SHARE_PILE)
+    val fullScreenRoutes = setOf(
+        NavDestinations.ONBOARDING,
+        NavDestinations.CREDITS_ROLL,
+        NavDestinations.RANK,
+        NavDestinations.SHARE_PILE,
+        // RevenueCatUI draws its own full-bleed layout including a close button; leaving our
+        // chrome on top of it would double up the dismiss affordances.
+        NavDestinations.PAYWALL,
+    )
     val showBottomBar = currentRoute != null && currentRoute !in fullScreenRoutes
+    // The coin balance is only chrome where coins are the subject: DRAW spends them, YOU is the
+    // account screen. Everywhere else it cost a phone ~52dp of header for a number nobody was
+    // about to act on, and pushed PILE's tabs visibly down the screen.
+    val coinCounterRoutes = setOf(NavDestinations.DRAW, NavDestinations.PROFILE)
+    val showCoinCounter = currentRoute in coinCounterRoutes
 
     ArcadeScaffold(
         navItemsLeft = listOf(
@@ -63,6 +77,7 @@ fun ContinueNavHost(
         coinBalance = coinBalance,
         isPro = isPro,
         showBottomBar = showBottomBar,
+        showCoinCounter = showCoinCounter,
     ) { padding ->
         NavHost(navController = navController, startDestination = startDestination, modifier = padding) {
             composable(NavDestinations.ONBOARDING) {
@@ -87,11 +102,19 @@ fun ContinueNavHost(
             composable(NavDestinations.SHARE_PILE) { PileShareScreen(onDismiss = { navController.popBackStack() }) }
             composable(NavDestinations.DISCOVER) { DiscoverScreen() }
             composable(NavDestinations.DRAW) {
-                DrawScreen(onNavigateToDiscover = {
-                    navController.navigate(NavDestinations.DISCOVER) { launchSingleTop = true }
-                })
+                DrawScreen(
+                    onNavigateToDiscover = {
+                        navController.navigate(NavDestinations.DISCOVER) { launchSingleTop = true }
+                    },
+                    onGoPro = { navController.navigate(NavDestinations.PAYWALL) },
+                )
             }
-            composable(NavDestinations.PROFILE) { ProfileScreen() }
+            composable(NavDestinations.PROFILE) {
+                ProfileScreen(onGoPro = { navController.navigate(NavDestinations.PAYWALL) })
+            }
+            composable(NavDestinations.PAYWALL) {
+                PaywallScreen(onDismiss = { navController.popBackStack() })
+            }
             composable(
                 NavDestinations.CREDITS_ROLL,
                 arguments = listOf(navArgument("entryId") { type = NavType.LongType }),

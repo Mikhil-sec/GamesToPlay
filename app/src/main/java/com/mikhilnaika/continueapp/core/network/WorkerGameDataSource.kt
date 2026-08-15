@@ -65,6 +65,21 @@ class WorkerGameDataSource @Inject constructor(
         return fromNetwork.ifEmpty { fromSeed() }
     }
 
+    /**
+     * Seed ids are negative by construction (see `tools/generate_seed.mjs`), so they can never
+     * be resolved against IGDB — skipping them avoids a guaranteed 404 round trip.
+     */
+    override suspend fun detail(id: Long): GameDto? {
+        if (id <= 0) return null
+        return try {
+            api.gameDetail(id)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (error: Exception) {
+            null
+        }
+    }
+
     override suspend fun resolve(text: String?, subject: String?): ResolveResponse = runCatching {
         api.resolve(ResolveRequest(text = text, subject = subject))
     }.getOrElse {
