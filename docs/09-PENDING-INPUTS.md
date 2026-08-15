@@ -4,18 +4,20 @@
 > decision still waiting on Mikhil. Claude should read this at the start of every session,
 > update it as items resolve, and never block on an item marked "not yet needed."
 >
-> Last updated: 2026-08-15 — second phone-test round; phone layout fixes across the nav bar,
-> PILE, DRAW and offline cover caching. **`versionCode 4` / `0.4.0` built and signed**
-> (supersedes `versionCode 3`, which was never uploaded).
+> Last updated: 2026-08-15 (later) — **the closed-testing paperwork is now written**. Every
+> Play Console field has a prepared answer in **`docs/13-STORE-LISTING.md`**: listing copy,
+> Data Safety, content rating, target audience, tester brief, release notes. The privacy
+> policy and a landing page exist as `docs/privacy.html` / `docs/index.html`, and the store
+> icon + feature graphic are generated in `store/`.
 >
 > **Open items needing Mikhil, in priority order:** ① 18 tester Gmail addresses (starts the
 > 14-day clock — still the biggest schedule risk, and now the *only* thing on the critical
-> path); ② upload the **already-built, signed `versionCode 4` .aab**; ③ privacy policy hosting
-> (**required at the first production/closed-testing submission**, so it is effectively part of
-> ①); ④ IGDB partnership reply (needs signing email + repo URL, see
-> `docs/11-IGDB-PARTNERSHIP.md`); ⑤ Play service-account JSON for RevenueCat; ⑥ store listing
-> assets (icon, feature graphic, screenshots — the phone screenshots should come from
-> `versionCode 4`, not the older builds).
+> path); ② **push + switch on GitHub Pages** so the privacy policy URL resolves (5 minutes,
+> §1 of `docs/13-STORE-LISTING.md`); ③ **4+ phone screenshots from `versionCode 4`** — the one
+> listing asset that needs a device (`tools/capture_screenshots.sh`); ④ paste the prepared
+> answers into Play Console and upload the **already-built, signed `versionCode 4` .aab**;
+> ⑤ IGDB partnership reply (needs signing email + repo URL, see `docs/11-IGDB-PARTNERSHIP.md`);
+> ⑥ Play service-account JSON for RevenueCat.
 >
 > **No longer needed:** designing a paywall in the RevenueCat dashboard (hand-built instead,
 > docs/10-BUILD-STATUS.md §The paywall) — and pasting `TWITCH_CLIENT_SECRET`, which Mikhil has
@@ -47,8 +49,9 @@
 | RevenueCat products, offerings, packages | ✅ **Pre-created in RevenueCat 2026-08-11 via MCP** — now waiting on the *matching* Play Console products | Subscriptions, coin packs | RevenueCat-side config is done: 6 products, 2 offerings, 6 packages, entitlement attachments, and COIN auto-grants all exist. They will read as "not found in store" until Mikhil creates products in Play Console with **exactly** the ids in the table at the bottom of this file. No RevenueCat work remains for this item. |
 | Play Console → RevenueCat service account | Not started | RevenueCat validating real purchases | Play Console → Setup → API access → create a service account with **Financial data / Manage orders** + **View app information**, download the JSON, upload it to the RevenueCat Android app config. Without it RevenueCat cannot verify Play purchases. |
 | Cloudflare Worker deployed | ✅ Deployed 2026-08-11 at `https://continue-worker.gamestoplay.workers.dev` | All game data, share-target resolution, coin spend | `local.properties` `WORKER_BASE_URL` updated to match. `/health` confirms `{"ok":true,"provider":"igdb"}` — **real IGDB data is live**, not the seed fallback. Share Target auto-match now works end-to-end for real. |
-| Privacy policy hosted | Not started | Play Store listing requirement | Host as a static page on the same Cloudflare account. Needed at first Play upload, not before. |
-| App icon, feature graphic, screenshots | Not started | Play listing + Devpost assets | Week 6–7 per the roadmap. |
+| Privacy policy hosted | 🟠 **Written, not yet live.** `docs/privacy.html` + `docs/index.html` are committed; needs `git push` and GitHub Pages switched to **main → /docs** | Play Store listing requirement — **blocking closed testing** | Will serve at `https://mikhil-sec.github.io/GamesToPlay/privacy.html`. GitHub Pages rather than Cloudflare: the repo is already public, the page lives beside the code that justifies its claims, and it costs one settings toggle. Exact steps in `docs/13-STORE-LISTING.md` §1. **Load the URL yourself before pasting it into Play** — Play's checker follows the link and a 404 is a rejection. |
+| App icon, feature graphic | ✅ **Generated 2026-08-15** — `store/icon-512.png`, `store/icon-1024.png`, `store/feature-graphic-1024x500.png` | Play listing + Devpost assets | Built by `tools/StoreAssets.java` from the launcher-icon geometry and the app's own palette/fonts, so the store mark and the installed icon can't drift. Re-run after any launcher-icon change. |
+| Phone screenshots (≥4) | ⏳ **Needs a phone** — the only listing asset that can't be produced here | Play listing | Take from `versionCode 4`, never the tablet: the 2026-08-15 layout round changed every screen worth showing. `bash tools/capture_screenshots.sh` walks the shot list (DRAW mid-deal → PILE → Credits Roll → RANK → paywall). |
 | Play promo code (trial backup) | Not started | Judge access if the 7-day trial isn't enough | Generate in week 7. |
 
 ## ✅ Already resolved — recorded for reference

@@ -18,6 +18,57 @@
 
 ---
 
+## 2026-08-15 (later) — the closed-testing paperwork, written end to end
+
+No app code changed. This session attacked the *other* half of the critical path: the store
+listing, which is what actually blocks a closed-test rollout (an internal-testing upload needs
+almost no paperwork, which is why `versionCode 1` sailed through and why this looked deceptively
+close to done).
+
+**New: `docs/13-STORE-LISTING.md` — the answer sheet.** Every Play Console field with its answer
+already written: app name/short/full description (length-checked against Play's 30/80/4000
+limits), category and tags, the Data Safety declaration, the IARC content-rating answers, target
+audience, the advertising-ID declaration, release notes, and the order the sections have to be
+filled in to unblock fastest.
+
+**The Data Safety form was derived from sources, not guessed**, because it's the most common
+rejection cause here and a wrong answer outlives the mistake. Google's published Mobile Ads SDK
+disclosure gives four of the six declarations (device IDs, app interactions, diagnostics, and
+IP-derived approximate location — all *shared*); RevenueCat's own docs give purchase history
+(collected, not shared, not linked, since our app user IDs are anonymous). The sixth is ours:
+search terms and shared captions reach the Worker, and the KV cache outlives the request, so
+"in-app search history" is declared rather than claimed ephemeral. Explicitly *not* declared:
+photos — shared images are OCR'd on-device by ML Kit and never leave the phone, and the app has
+no photo-library permission at all.
+
+**Privacy policy + landing page written and committed** as `docs/privacy.html` and
+`docs/index.html` (plus `docs/.nojekyll`), styled in the app's own palette. Publishing is a
+`git push` and one GitHub Pages toggle (main → `/docs`), landing at
+`https://mikhil-sec.github.io/GamesToPlay/privacy.html`. Two claims were caught and removed
+while writing it, both of which would have been false:
+- an EEA/UK **consent flow** — the app has no CMP at all (nothing references
+  `UserMessagingPlatform`), which is a real gap under Google's EU user consent policy and is now
+  logged as such rather than papered over;
+- a **RevenueCat app user ID shown on the YOU tab** as the handle for deletion requests — it
+  isn't displayed anywhere, so the policy asks for the Play order ID instead.
+
+**Store graphics generated:** `store/icon-512.png`, `store/icon-1024.png` and
+`store/feature-graphic-1024x500.png`, produced by `tools/StoreAssets.java` (plain JDK 21 + AWT,
+no build, no dependency) from the launcher icon's own path coordinates, `Color.kt`, and the
+bundled Chakra Petch faces — so the store mark and the installed icon are the same artwork and
+can't drift. All original: no box art, no third-party logo, no influencer branding.
+
+**Still needs a device: the screenshots.** `adb devices` was empty again this session.
+`tools/capture_screenshots.sh` prompts through the shot list and captures with `exec-out`; they
+must come from `versionCode 4` on a *phone*, since the 2026-08-15 layout round changed every
+screen worth showing.
+
+**Listing copy is scoped to the shipped build on purpose.** The Devpost draft in
+`docs/07-SUBMISSION-KIT.md` sells Steam import, Free Play Mode and five share cards; one is
+disabled and two don't exist. The Play description covers only what `0.4.0` actually does.
+
+---
+
 ## 2026-08-15 — phone vs tablet: the layout round
 
 Mikhil ran `0.3.0` on both a phone and the Galaxy Tab and reported that **the same build looks
@@ -889,7 +940,11 @@ Nothing built or planned in the near term needs to wait for either.
 
 ## 8. Recommended next priority
 
-> **Superseded 2026-08-15 — read this first.** Current order:
+> **Superseded 2026-08-15 (later) — read this first.** Current order:
+> 0. **Publish the privacy policy** (push + GitHub Pages toggle, 5 min) and **take 4+ phone
+>    screenshots of `versionCode 4`** (`tools/capture_screenshots.sh`). Those two are the only
+>    remaining inputs to a complete store listing — every other field is pre-answered in
+>    **`docs/13-STORE-LISTING.md`**.
 > 1. **Collect the 12+ tester emails and start the closed test.** This outranks every code item
 >    below and always will until the clock is running — 14 consecutive days, per-app, and the
 >    Shipaton deadline is 2026-09-30. Nothing in the build blocks it: `versionCode 4` is signed
