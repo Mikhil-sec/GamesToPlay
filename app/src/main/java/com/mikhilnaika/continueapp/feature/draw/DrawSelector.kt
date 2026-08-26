@@ -4,6 +4,7 @@ import com.mikhilnaika.continueapp.core.data.Mood
 import com.mikhilnaika.continueapp.core.data.TimeBudget
 import com.mikhilnaika.continueapp.core.data.dao.DrawCandidateRow
 import com.mikhilnaika.continueapp.core.util.MoodMapper
+import com.mikhilnaika.continueapp.core.util.Playtime
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonPrimitive
@@ -90,8 +91,17 @@ object DrawSelector {
         return hours <= maxHours
     }
 
+    /**
+     * DRAW keeps its own preference order — `hastily` first, because "can I finish this
+     * tonight?" is asking about the fastest honest route to the credits, not the leisurely one.
+     * Every figure is still passed through [Playtime]'s plausibility ceiling first, so a
+     * sandbox game's polluted lifetime-playtime number (Minecraft's 956h "normally") can't
+     * decide a time budget. Null still means "unknown", which never disqualifies.
+     */
     private fun estimatedHours(c: DrawCandidateRow): Float? =
-        (c.playtimeHoursHastily ?: c.playtimeHoursNormally ?: c.playtimeHoursCompletely)?.toFloat()
+        listOfNotNull(c.playtimeHoursHastily, c.playtimeHoursNormally, c.playtimeHoursCompletely)
+            .firstOrNull { it > 0 && it <= Playtime.MAX_PLAUSIBLE_HOURS }
+            ?.toFloat()
 
     private fun weightOf(
         c: DrawCandidateRow,

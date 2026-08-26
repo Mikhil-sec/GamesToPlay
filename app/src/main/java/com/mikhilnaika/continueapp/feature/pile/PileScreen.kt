@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -49,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -59,7 +61,9 @@ import com.mikhilnaika.continueapp.core.design.ContinueColors
 import com.mikhilnaika.continueapp.core.design.ContinueSpacing
 import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
 import com.mikhilnaika.continueapp.core.ui.EmptyState
+import com.mikhilnaika.continueapp.core.util.playtimeLabel
 import com.mikhilnaika.continueapp.core.ui.GameCard
+import com.mikhilnaika.continueapp.core.util.Haptics
 import com.mikhilnaika.continueapp.feature.stacks.StacksViewModel
 
 private val PILE_TABS = listOf(
@@ -85,8 +89,12 @@ fun PileScreen(
     val stacksViewModel: StacksViewModel = hiltViewModel()
     val stacksState by stacksViewModel.state.collectAsState()
     var actionMenuEntry by remember { mutableStateOf<PileEntryWithGame?>(null) }
+    var removeConfirmEntry by remember { mutableStateOf<PileEntryWithGame?>(null) }
 
     var controlsExpanded by rememberSaveable { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val haptics = remember { Haptics(context) }
 
     val emptyHeadline = when (state.selectedState) {
         PileState.BACKLOG -> "INSERT GAME TO BEGIN"
@@ -94,6 +102,17 @@ fun PileScreen(
         PileState.COMPLETED -> "NOTHING CLEARED YET"
         PileState.DROPPED -> "NOTHING RETIRED"
         PileState.WISHLIST -> "NOTHING WANTED YET"
+    }
+    // The empty pile is the app's best teaching moment and it was spending it on a slogan.
+    // Nothing anywhere in the app mentioned the share target — the feature the whole product is
+    // built around — so a user who never thought to look in the OS share sheet simply never
+    // found it. See docs/10-BUILD-STATUS.md 2026-08-19.
+    val emptySupporting = when (state.selectedState) {
+        PileState.BACKLOG ->
+            "Saw a game in a video? Hit share in TikTok, YouTube or Reddit and pick CONTINUE? — " +
+                "it reads the title and adds it here. Or search for one in DISCOVER."
+        PileState.WISHLIST -> "Games you don't own yet. Share or search one in to start the list."
+        else -> null
     }
     val isEmpty = state.entries.isEmpty() && !state.isLoading
 
@@ -118,67 +137,115 @@ fun PileScreen(
         )
     }
 
-    if (state.viewMode == PileViewMode.GRID) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
-            modifier = modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = ContinueSpacing.LG.dp,
-                end = ContinueSpacing.LG.dp,
-                top = ContinueSpacing.SM.dp,
-                // The raised DRAW button overhangs the nav bar by 24dp, so the last row needs
-                // clearance or it sits underneath it.
-                bottom = ContinueSpacing.XXL.dp,
-            ),
-            horizontalArrangement = Arrangement.spacedBy(ContinueSpacing.SM.dp),
-            verticalArrangement = Arrangement.spacedBy(ContinueSpacing.SM.dp),
-        ) {
-            item(span = { GridItemSpan(maxLineSpan) }, key = "header") { header() }
+    when (state.viewMode) {
+        // STACK owns a vertical drag gesture of its own, so it cannot live inside a scrolling
+        // parent the way GRID and LIST do — the two would fight for every drag. Its header is a
+        // fixed block instead, and the stack takes whatever height is left and sizes itself to
+        // it, so expanding the filters shrinks the cards rather than pushing them off-screen.
+        PileViewMode.STACK -> Column(modifier = modifier.fillMaxSize()) {
+            Column(modifier = Modifier.padding(horizontal = ContinueSpacing.LG.dp)) { header() }
             if (isEmpty) {
-                item(span = { GridItemSpan(maxLineSpan) }, key = "empty") {
-                    EmptyState(headline = emptyHeadline, modifier = Modifier.fillMaxWidth().height(EMPTY_STATE_HEIGHT))
-                }
+                EmptyState(
+                    headline = emptyHeadline,
+                    supporting = emptySupporting,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                )
             } else {
-                items(state.entries, key = { it.entryId }) { entry ->
-                    PileGameCard(
-                        entry = entry,
-                        // Tapping used to fling a BACKLOG game straight into NOW PLAYING, which
-                        // read as "the game vanished" — the card left the list with no
-                        // confirmation and no way back. Both gestures now open the same
-                        // chooser; moving a game is always a deliberate, labelled choice.
-                        onClick = { actionMenuEntry = entry },
-                        onLongClick = { actionMenuEntry = entry },
-                    )
+                PileStackView(
+                    entries = state.entries,
+                    onSelect = { actionMenuEntry = it },
+                    // Any of these makes it a different pile, and leaving the stack parked on
+                    // card 40 of a list that just became three cards long is disorienting.
+                    resetKey = listOf(
+                        state.selectedState,
+                        state.sort,
+                        state.platformFilter,
+                        state.genreFilter,
+                        state.lengthBucketFilter,
+                    ),
+                    haptics = haptics,
+                    showHint = state.showStackHint,
+                    onHintDismissed = viewModel::markStackHintSeen,
+                    modifier = Modifier
+                        .weight(1f)
+                        // Same 24dp DRAW-button overhang the lazy lists pad for below.
+                        .padding(bottom = ContinueSpacing.XXL.dp),
+                )
+            }
+        }
+
+        PileViewMode.GRID -> {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = ContinueSpacing.LG.dp,
+                    end = ContinueSpacing.LG.dp,
+                    top = ContinueSpacing.SM.dp,
+                    // The raised DRAW button overhangs the nav bar by 24dp, so the last row needs
+                    // clearance or it sits underneath it.
+                    bottom = ContinueSpacing.XXL.dp,
+                ),
+                horizontalArrangement = Arrangement.spacedBy(ContinueSpacing.SM.dp),
+                verticalArrangement = Arrangement.spacedBy(ContinueSpacing.SM.dp),
+            ) {
+                item(span = { GridItemSpan(maxLineSpan) }, key = "header") { header() }
+                if (isEmpty) {
+                    item(span = { GridItemSpan(maxLineSpan) }, key = "empty") {
+                        EmptyState(
+                            headline = emptyHeadline,
+                            supporting = emptySupporting,
+                            modifier = Modifier.fillMaxWidth().height(EMPTY_STATE_HEIGHT),
+                        )
+                    }
+                } else {
+                    items(state.entries, key = { it.entryId }) { entry ->
+                        PileGameCard(
+                            entry = entry,
+                            // Tapping used to fling a BACKLOG game straight into NOW PLAYING, which
+                            // read as "the game vanished" — the card left the list with no
+                            // confirmation and no way back. Both gestures now open the same
+                            // chooser; moving a game is always a deliberate, labelled choice.
+                            onClick = { actionMenuEntry = entry },
+                            onLongClick = { actionMenuEntry = entry },
+                        )
+                    }
                 }
             }
         }
-    } else {
-        LazyColumn(
-            modifier = modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = ContinueSpacing.LG.dp,
-                end = ContinueSpacing.LG.dp,
-                top = ContinueSpacing.SM.dp,
-                bottom = ContinueSpacing.XXL.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(ContinueSpacing.XS.dp),
-        ) {
-            item(key = "header") { header() }
-            if (isEmpty) {
-                item(key = "empty") {
-                    EmptyState(headline = emptyHeadline, modifier = Modifier.fillMaxWidth().height(EMPTY_STATE_HEIGHT))
-                }
-            } else {
-                items(state.entries, key = { it.entryId }) { entry ->
-                    PileListRow(
-                        entry = entry,
-                        // Tapping used to fling a BACKLOG game straight into NOW PLAYING, which
-                        // read as "the game vanished" — the card left the list with no
-                        // confirmation and no way back. Both gestures now open the same
-                        // chooser; moving a game is always a deliberate, labelled choice.
-                        onClick = { actionMenuEntry = entry },
-                        onLongClick = { actionMenuEntry = entry },
-                    )
+
+        PileViewMode.LIST -> {
+            LazyColumn(
+                modifier = modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = ContinueSpacing.LG.dp,
+                    end = ContinueSpacing.LG.dp,
+                    top = ContinueSpacing.SM.dp,
+                    bottom = ContinueSpacing.XXL.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(ContinueSpacing.XS.dp),
+            ) {
+                item(key = "header") { header() }
+                if (isEmpty) {
+                    item(key = "empty") {
+                        EmptyState(
+                            headline = emptyHeadline,
+                            supporting = emptySupporting,
+                            modifier = Modifier.fillMaxWidth().height(EMPTY_STATE_HEIGHT),
+                        )
+                    }
+                } else {
+                    items(state.entries, key = { it.entryId }) { entry ->
+                        PileListRow(
+                            entry = entry,
+                            // Tapping used to fling a BACKLOG game straight into NOW PLAYING, which
+                            // read as "the game vanished" — the card left the list with no
+                            // confirmation and no way back. Both gestures now open the same
+                            // chooser; moving a game is always a deliberate, labelled choice.
+                            onClick = { actionMenuEntry = entry },
+                            onLongClick = { actionMenuEntry = entry },
+                        )
+                    }
                 }
             }
         }
@@ -206,6 +273,21 @@ fun PileScreen(
                 else viewModel.moveTo(entry.entryId, target)
             },
             onToggleStack = { stackId -> stacksViewModel.addGameToStack(stackId, entry.gameId) },
+            onRemove = {
+                actionMenuEntry = null
+                removeConfirmEntry = entry
+            },
+        )
+    }
+
+    removeConfirmEntry?.let { entry ->
+        RemoveConfirmDialog(
+            entry = entry,
+            onDismiss = { removeConfirmEntry = null },
+            onConfirm = {
+                removeConfirmEntry = null
+                viewModel.removeFromPile(entry.entryId)
+            },
         )
     }
 }
@@ -233,6 +315,7 @@ private fun PileActionMenu(
     onDismiss: () -> Unit,
     onMove: (PileState) -> Unit,
     onToggleStack: (Long) -> Unit,
+    onRemove: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -278,10 +361,71 @@ private fun PileActionMenu(
                         }
                     }
                 }
+
+                // Last, under its own heading, in the one hot colour the app reserves for
+                // destructive things — it is *not* a sixth destination, and putting it in the
+                // MOVE TO list would invite exactly the mis-tap it exists to undo.
+                Text(
+                    text = "OR",
+                    style = ContinueTextStyles.label,
+                    color = ContinueColors.TextTertiary,
+                    modifier = Modifier.padding(top = ContinueSpacing.SM.dp),
+                )
+                TextButton(onClick = onRemove, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "REMOVE FROM PILE",
+                            style = ContinueTextStyles.body,
+                            color = ContinueColors.AccentHot,
+                        )
+                        Text(
+                            text = "Added by mistake — erase it completely",
+                            style = ContinueTextStyles.label,
+                            color = ContinueColors.TextTertiary,
+                        )
+                    }
+                }
             }
         },
         confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text("CANCEL") } },
+        containerColor = ContinueColors.SurfaceRaised,
+        textContentColor = ContinueColors.TextSecondary,
+        titleContentColor = ContinueColors.TextPrimary,
+    )
+}
+
+/**
+ * The one destructive confirm in PILE.
+ *
+ * Removal is the only action here that can't be walked back from another tab — every "MOVE TO"
+ * has an obvious inverse, this has none — so it gets a second tap and the game's name spelled
+ * out, and the safe choice is the one sitting where a dialog's default goes.
+ */
+@Composable
+private fun RemoveConfirmDialog(
+    entry: PileEntryWithGame,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("REMOVE FROM PILE?") },
+        text = {
+            Text(
+                text = "${entry.name} will be erased from your pile, its stacks and your " +
+                    "rankings. This can't be undone — RETIRED is the one to use if you're just " +
+                    "letting the game go.",
+                style = ContinueTextStyles.body,
+                color = ContinueColors.TextSecondary,
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("REMOVE", color = ContinueColors.AccentHot)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("KEEP IT") } },
         containerColor = ContinueColors.SurfaceRaised,
         textContentColor = ContinueColors.TextSecondary,
         titleContentColor = ContinueColors.TextPrimary,
@@ -422,27 +566,36 @@ private fun SortFilterRow(sort: PileSort, onSortSelected: (PileSort) -> Unit, mo
 
 @Composable
 private fun PileGameCard(entry: PileEntryWithGame, onClick: () -> Unit, onLongClick: () -> Unit) {
-    val hours = entry.playtimeHoursNormally
     GameCard(
         title = entry.name,
         coverUrl = entry.coverUrl,
-        subtitle = if (hours != null) "$hours HRS" else null,
+        subtitle = entry.playtimeLabel,
         onClick = onClick,
         onLongClick = onLongClick,
     )
 }
 
 /**
- * One button, not two: it shows the mode you'd switch *to*. Two side-by-side icon buttons cost
- * 96dp of a phone's header for a binary choice, and the un-picked one always read as disabled.
+ * One button, not three: it cycles, and shows the mode you'd switch *to*. Three side-by-side
+ * icon buttons cost 144dp of a phone's header for a choice made once, and the un-picked ones
+ * always read as disabled. Cycle order is the enum's own order, so the two can't drift.
  */
 @Composable
 private fun ViewModeToggle(mode: PileViewMode, onSelect: (PileViewMode) -> Unit, modifier: Modifier = Modifier) {
-    val next = if (mode == PileViewMode.GRID) PileViewMode.LIST else PileViewMode.GRID
+    val modes = PileViewMode.entries
+    val next = modes[(mode.ordinal + 1) % modes.size]
     IconButton(onClick = { onSelect(next) }, modifier = modifier) {
         Icon(
-            imageVector = if (next == PileViewMode.GRID) Icons.Filled.GridView else Icons.AutoMirrored.Filled.ViewList,
-            contentDescription = if (next == PileViewMode.GRID) "Switch to grid view" else "Switch to list view",
+            imageVector = when (next) {
+                PileViewMode.STACK -> Icons.Filled.ViewCarousel
+                PileViewMode.GRID -> Icons.Filled.GridView
+                PileViewMode.LIST -> Icons.AutoMirrored.Filled.ViewList
+            },
+            contentDescription = when (next) {
+                PileViewMode.STACK -> "Switch to stack view"
+                PileViewMode.GRID -> "Switch to grid view"
+                PileViewMode.LIST -> "Switch to list view"
+            },
             tint = ContinueColors.TextSecondary,
         )
     }
@@ -490,7 +643,6 @@ private fun FiltersRow(
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun PileListRow(entry: PileEntryWithGame, onClick: () -> Unit, onLongClick: () -> Unit) {
-    val hours = entry.playtimeHoursNormally
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -525,7 +677,7 @@ private fun PileListRow(entry: PileEntryWithGame, onClick: () -> Unit, onLongCli
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = listOfNotNull(entry.ownedPlatform, hours?.let { "$it HRS" }).joinToString(" · "),
+                text = listOfNotNull(entry.ownedPlatform, entry.playtimeLabel).joinToString(" · "),
                 style = ContinueTextStyles.label,
                 color = ContinueColors.TextSecondary,
             )

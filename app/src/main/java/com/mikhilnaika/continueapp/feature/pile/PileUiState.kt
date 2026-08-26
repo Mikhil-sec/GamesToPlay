@@ -7,9 +7,12 @@ enum class PileSort {
     DATE_ADDED, TITLE, LENGTH_SHORT_FIRST, RATING, PLATFORM, RELEASE_DATE
 }
 
-/** docs/02-PRODUCT-SPEC.md §1 "Views" — STACK is the signature 3D view, deferred (see
- * docs/10-BUILD-STATUS.md); GRID and LIST are both real here. */
-enum class PileViewMode { GRID, LIST }
+/**
+ * docs/02-PRODUCT-SPEC.md §1 "Views". STACK is the signature receding-3D view and the spec's
+ * default; GRID is the practical one and LIST the dense one. Declared in the order the view
+ * toggle cycles through them.
+ */
+enum class PileViewMode { STACK, GRID, LIST }
 
 enum class LengthBucket(val label: String, val minHours: Int, val maxHours: Int?) {
     UNDER_5("UNDER 5H", 0, 5),
@@ -29,7 +32,7 @@ data class SwapPrompt(
 
 data class PileUiState(
     val selectedState: PileState = PileState.BACKLOG,
-    val viewMode: PileViewMode = PileViewMode.GRID,
+    val viewMode: PileViewMode = PileViewMode.STACK,
     val entries: List<PileEntryWithGame> = emptyList(),
     val sort: PileSort = PileSort.DATE_ADDED,
     val platformFilter: String? = null,
@@ -41,6 +44,8 @@ data class PileUiState(
     val totalGames: Int = 0,
     val hoursPerWeek: Float = 6f,
     val swapPrompt: SwapPrompt? = null,
+    /** One-time teach for STACK's drag gesture — see `UserPreferencesRepository`. */
+    val showStackHint: Boolean = false,
     val isLoading: Boolean = true,
 ) {
     /** How many filters are narrowing the list — surfaced on the collapsed SORT & FILTER chip

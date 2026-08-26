@@ -18,6 +18,10 @@ object TitleParser {
     private val NOISE_PATTERNS: List<Regex> = listOf(
         Regex("""https?://\S+"""),                 // URLs
         Regex("""www\.\S+"""),
+        // Scheme-less links — share sheets hand over "youtu.be/abc" and "instagram.com/reel/xyz"
+        // at least as often as full URLs. Without this they survive cleaning and get offered to
+        // the user as a suggested game title, which they then have to delete before typing.
+        Regex("""[\w-]+(\.[\w-]+)+/\S*"""),
         Regex("""\[[^\]]*]"""),                     // [4K], [HD]
         Regex("""\([^)]*\)"""),                     // (Official Trailer)
         Regex("""\br/\w+"""),                       // r/gaming

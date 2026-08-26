@@ -26,6 +26,20 @@ interface WorkerApi {
     @GET("games/short")
     suspend fun shortAndSweet(): SearchResponse
 
+    @GET("games/new")
+    suspend fun newReleases(): SearchResponse
+
+    @GET("games/gems")
+    suspend fun hiddenGems(): SearchResponse
+
+    /**
+     * Genre rail, addressed by IGDB's own genre *name* — the app already holds those strings on
+     * its cached games, so it never has to hardcode IGDB's numeric ids. The Worker resolves the
+     * name against a cached genre table and only ever caches by the resolved id.
+     */
+    @GET("games/genre")
+    suspend fun byGenre(@Query("name") name: String): SearchResponse
+
     @GET("games/{id}")
     suspend fun gameDetail(@Path("id") id: Long): GameDto
 

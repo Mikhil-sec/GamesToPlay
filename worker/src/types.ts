@@ -49,6 +49,12 @@ export interface ResolveResponse {
   source: string;
   candidates: ResolveCandidate[];
   needsManualEntry: boolean;
+  /**
+   * Cleanest available guess at a *game name*, for the app to prefill its manual-entry field
+   * with. Null when there is nothing better than a bare link — an empty field beats a field
+   * the user has to clear first. Never contains a URL.
+   */
+  suggestion: string | null;
 }
 
 export interface SteamOwnedGame {
@@ -70,4 +76,18 @@ export interface GameProvider {
   detail(id: number): Promise<GameDto | null>;
   trending(): Promise<GameDto[]>;
   shortAndSweet(): Promise<GameDto[]>;
+  newReleases(): Promise<GameDto[]>;
+  hiddenGems(): Promise<GameDto[]>;
+  /**
+   * The genre table, so a caller can turn a genre *name* into an id. Kept separate from
+   * [byGenre] on purpose: the route caches this whole table under one key and resolves names
+   * in memory, which is what stops arbitrary client strings from minting unbounded KV keys.
+   */
+  genres(): Promise<GenreRef[]>;
+  byGenre(genreId: number): Promise<GameDto[]>;
+}
+
+export interface GenreRef {
+  id: number;
+  name: string;
 }

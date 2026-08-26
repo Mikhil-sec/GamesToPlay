@@ -30,6 +30,25 @@ import javax.inject.Inject
 import kotlin.coroutines.resume
 
 /**
+ * A tiktok.com link, matched by host label. `(?:^|[^\w.-])` refuses a match that continues
+ * leftwards into a longer label (`eviltiktok.com`) and the lookahead refuses one that continues
+ * rightwards (`tiktok.com.example.org`), which is the whole difference between a host check and
+ * a substring check.
+ */
+private val TIKTOK_LINK = Regex("""(?:^|[^\w.-])(?:[\w-]+\.)*tiktok\.com(?=[/:?#]|$)""", RegexOption.IGNORE_CASE)
+
+/**
+ * True when [raw] carries a tiktok.com link.
+ *
+ * Matched on the *host*, not `contains("tiktok.com")` — the same distinction the Worker makes in
+ * `security.ts`, for the same reason it's easy to get wrong: `tiktok.com.example` contains the
+ * substring and is not TikTok, while `vm.tiktok.com` and `vt.tiktok.com` (the two short forms
+ * the Android app actually shares) are.
+ */
+internal fun looksLikeTikTokLink(raw: String?): Boolean =
+    raw != null && TIKTOK_LINK.containsMatchIn(raw)
+
+/**
  * Drives the transparent share-sheet Activity — docs/02-PRODUCT-SPEC.md §2a. Two entry
  * points: [resolveText] for `text/plain` shares, [resolveImage] for image shares (the
  * Instagram-Reels workaround, run entirely on-device via ML Kit).
@@ -47,10 +66,29 @@ class ShareTargetViewModel @Inject constructor(
     val state: StateFlow<ShareResolutionState> = _state
 
     private val json = Json { ignoreUnknownKeys = true }
-    private var lastRawText: String? = null
+
+    /**
+     * What to put in the manual-entry field — a cleaned, URL-free fragment, or null.
+     *
+     * This deliberately no longer holds the raw shared text. It used to, and that is exactly
+     * what the first closed-test report was about: a YouTube or Instagram share dropped its
+     * whole URL into the search box, so every fallback started with the user selecting and
+     * deleting a link before they could type anything. An empty field is strictly better than
+     * a field with a URL in it; a partial title is better still, which is what this holds when
+     * one is available. See docs/10-BUILD-STATUS.md 2026-08-19.
+     */
+    private var lastPrefill: String? = null
+
+    /**
+     * Whether the share that opened this sheet came from TikTok — see [classify], which is where
+     * it changes the outcome. Sticky for the life of the sheet so "search instead" and a failed
+     * manual search land back on the same explanation rather than the generic one.
+     */
+    private var isTikTokShare: Boolean = false
 
     fun resolveText(text: String?, subject: String?) {
-        lastRawText = text
+        lastPrefill = cleanPrefill(text) ?: cleanPrefill(subject)
+        isTikTokShare = looksLikeTikTokLink(text) || looksLikeTikTokLink(subject)
         viewModelScope.launch {
             _state.value = ShareResolutionState.Loading
             resolveAgainstWorker(text, subject)
@@ -61,7 +99,10 @@ class ShareTargetViewModel @Inject constructor(
         viewModelScope.launch {
             _state.value = ShareResolutionState.Loading
             val recognizedText = runCatching { recognizeText(imageUri) }.getOrNull()
-            lastRawText = recognizedText
+            lastPrefill = cleanPrefill(recognizedText)
+            // A screenshot is pixels, not a link — OCR text stands on its own merits whatever app
+            // it was captured in, so the TikTok rule deliberately doesn't reach this path.
+            isTikTokShare = false
             if (recognizedText.isNullOrBlank()) {
                 _state.value = ShareResolutionState.ManualEntry(prefillText = null)
                 return@launch
@@ -70,11 +111,23 @@ class ShareTargetViewModel @Inject constructor(
         }
     }
 
+    /**
+     * The best game-name-shaped fragment of [raw], or null if there isn't one.
+     *
+     * [TitleParser] strips links (including scheme-less ones like `youtu.be/abc`), so anything
+     * that survives is prose rather than a URL. A share that was *only* a link therefore
+     * correctly yields null — Instagram's are structurally unresolvable, and a blank field is
+     * the honest answer there.
+     */
+    private fun cleanPrefill(raw: String?): String? =
+        TitleParser.extractCandidates(raw).firstOrNull()?.takeIf { it.isNotBlank() }
+
     private suspend fun resolveAgainstWorker(text: String?, subject: String?) {
         // Local candidate extraction happens first so the manual-entry prefill is always the
-        // cleanest available text even if everything below fails outright.
-        val localCandidates = TitleParser.extractCandidates(text ?: subject)
-        val bestLocalGuess = localCandidates.firstOrNull() ?: text
+        // cleanest available text even if everything below fails outright. Note it falls back
+        // to null, never to `text` — falling back to the raw share text is what put URLs in the
+        // search box (see [lastPrefill]).
+        val bestLocalGuess = cleanPrefill(text) ?: cleanPrefill(subject)
         val original = text ?: subject
 
         // Offline-first (docs/08-GAME-DATA.md §Data dumps): the on-device index can answer
@@ -88,18 +141,36 @@ class ShareTargetViewModel @Inject constructor(
                 resolvedTitle = original,
                 candidates = offlineMatches,
                 needsManualEntry = false,
-                rawText = original ?: bestLocalGuess,
+                rawText = bestLocalGuess,
+                isTikTok = isTikTokShare,
             )
             return
         }
 
         val response = gameDataSource.resolve(text = text, subject = subject)
         val merged = mergeCandidates(offlineMatches, response.candidates)
+
+        // Preference order for the field, best first: the Worker's ranked guess at a game name,
+        // then the Worker's resolved title cleaned locally (a YouTube video title is real text
+        // but still full of channel branding), then whatever the share text itself yielded.
+        // Every rung is URL-free by construction, and the whole thing may be null.
+        //
+        // The Worker's `suggestion` goes back through [cleanPrefill] rather than being trusted
+        // as-is. It is documented as never containing a URL and it never has in testing, but
+        // this field is the one place in the app where being wrong costs the user a
+        // select-all-and-delete before they can type — so the guarantee is enforced on the side
+        // that suffers if it breaks, not just asserted on the side that makes it.
+        val prefill = cleanPrefill(response.suggestion)
+            ?: cleanPrefill(response.resolvedTitle)
+            ?: bestLocalGuess
+        lastPrefill = prefill
+
         _state.value = classify(
             resolvedTitle = response.resolvedTitle,
             candidates = merged,
             needsManualEntry = merged.isEmpty(),
-            rawText = response.resolvedTitle ?: bestLocalGuess ?: text,
+            rawText = prefill,
+            isTikTok = isTikTokShare,
         )
     }
 
@@ -169,13 +240,20 @@ class ShareTargetViewModel @Inject constructor(
 
     /** "search instead" — always available, per the degradation ladder. */
     fun fallBackToManualEntry() {
-        _state.value = ShareResolutionState.ManualEntry(prefillText = lastRawText)
+        _state.value = if (isTikTokShare) {
+            ShareResolutionState.ManualEntry(prefillText = null, note = TIKTOK_NOTE)
+        } else {
+            ShareResolutionState.ManualEntry(prefillText = lastPrefill)
+        }
     }
 
     fun searchManually(query: String) {
         viewModelScope.launch {
             val results = runCatching { gameDataSource.search(query) }.getOrDefault(emptyList())
             _state.value = if (results.isEmpty()) {
+                // The user's own typing comes back in the field — unlike a machine guess, they
+                // want to edit it rather than clear it. No TikTok note here: they've already
+                // typed, so the explanation for why they had to has done its job.
                 ShareResolutionState.ManualEntry(prefillText = query)
             } else {
                 ShareResolutionState.Ambiguous(

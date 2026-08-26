@@ -160,6 +160,7 @@ private fun ShareSheet(viewModel: ShareTargetViewModel, onDismiss: () -> Unit) {
                 )
                 is ShareResolutionState.ManualEntry -> ManualEntryField(
                     prefill = current.prefillText.orEmpty(),
+                    note = current.note,
                     onSearch = viewModel::searchManually,
                 )
                 is ShareResolutionState.Added -> AddedConfirmation(gameName = current.gameName, onDismiss = onDismiss)
@@ -203,11 +204,15 @@ private fun AmbiguousList(
 }
 
 @Composable
-private fun ManualEntryField(prefill: String, onSearch: (String) -> Unit) {
+private fun ManualEntryField(prefill: String, note: String?, onSearch: (String) -> Unit) {
     var query by remember { mutableStateOf(prefill) }
     Column {
         Text(
-            text = "Couldn't match that automatically — type the name",
+            // When we know *why* the match couldn't happen, say that instead. "Couldn't match
+            // that automatically" reads as a fault the app might fix on the next try; "TikTok
+            // doesn't hand over a video's title" tells the user this is how that source works,
+            // so they stop retrying it and just type.
+            text = note ?: "Couldn't match that automatically — type the name",
             style = ContinueTextStyles.body,
             color = ContinueColors.TextSecondary,
         )

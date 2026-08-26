@@ -34,4 +34,12 @@ interface StackDao {
 
     @Query("DELETE FROM stack_members WHERE stackId = :stackId AND gameId = :gameId")
     suspend fun removeMember(stackId: Long, gameId: Long)
+
+    /**
+     * Drop a game from every stack it's in. There are no foreign keys between `stack_members`
+     * and `pile_entries`, so removing a game from the pile has to sweep this table by hand —
+     * otherwise the game keeps appearing inside its stacks with no row left to open.
+     */
+    @Query("DELETE FROM stack_members WHERE gameId = :gameId")
+    suspend fun removeFromAllStacks(gameId: Long)
 }

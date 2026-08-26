@@ -4,20 +4,30 @@
 > decision still waiting on Mikhil. Claude should read this at the start of every session,
 > update it as items resolve, and never block on an item marked "not yet needed."
 >
-> Last updated: 2026-08-15 (later) — **the closed-testing paperwork is now written**. Every
+> Last updated: 2026-08-19 — **the closed test is live and the 12-tester requirement shows as
+> met.** Items ①–④ below are therefore closed: the privacy policy resolves (verified HTTP 200
+> this session), the listing is filled in, and a build is on the closed track. What replaces them
+> is *protecting* the clock — see `docs/10-BUILD-STATUS.md` §2026-08-19 for the three ways it can
+> still reset. **Both open facts are now confirmed:** the clock started **2026-08-19** and
+> **`versionCode 4`** is the build on the closed track, so production access can be applied for
+> from **2026-09-02**. A signed **`versionCode 5` / `0.5.0`** bundle is built and waiting at
+> `app/build/outputs/bundle/release/app-release.aab` (32.4 MB, versionName verified inside the
+> bundle manifest), carrying the STACK view, five DISCOVER rails, and the share-target copy.
+>
+> Previous entry: 2026-08-15 (later) — **the closed-testing paperwork is now written**. Every
 > Play Console field has a prepared answer in **`docs/13-STORE-LISTING.md`**: listing copy,
 > Data Safety, content rating, target audience, tester brief, release notes. The privacy
 > policy and a landing page exist as `docs/privacy.html` / `docs/index.html`, and the store
 > icon + feature graphic are generated in `store/`.
 >
-> **Open items needing Mikhil, in priority order:** ① 18 tester Gmail addresses (starts the
-> 14-day clock — still the biggest schedule risk, and now the *only* thing on the critical
-> path); ② **push + switch on GitHub Pages** so the privacy policy URL resolves (5 minutes,
-> §1 of `docs/13-STORE-LISTING.md`); ③ **4+ phone screenshots from `versionCode 4`** — the one
-> listing asset that needs a device (`tools/capture_screenshots.sh`); ④ paste the prepared
-> answers into Play Console and upload the **already-built, signed `versionCode 4` .aab**;
-> ⑤ IGDB partnership reply (needs signing email + repo URL, see `docs/11-IGDB-PARTNERSHIP.md`);
-> ⑥ Play service-account JSON for RevenueCat.
+> **Open items needing Mikhil, in priority order:** ① **keep the opted-in tester count above
+> 12 for the full 14 days** — one uninstall resets the counter rather than pausing it, so the
+> headroom over 12 is the whole defence; ② **a phone on `adb`** — three separate bodies of work
+> are now blocked behind it (the 2026-08-15 layout fixes, RANK/Stacks/offline matching, and the
+> new STACK view's feel constants), and it's still the only way to get store screenshots;
+> ③ **Play service-account JSON for RevenueCat** — now genuinely blocking, because testers are
+> live and RevenueCat cannot verify a real Play purchase without it; ④ IGDB partnership reply
+> (needs signing email + repo URL, see `docs/11-IGDB-PARTNERSHIP.md`).
 >
 > **No longer needed:** designing a paywall in the RevenueCat dashboard (hand-built instead,
 > docs/10-BUILD-STATUS.md §The paywall) — and pasting `TWITCH_CLIENT_SECRET`, which Mikhil has
@@ -39,7 +49,9 @@
 | **Google Play developer account** | ✅ Live as of 2026-08-11 | Publishing (Gaming, Design, Catvertising categories) | **Correction, 2026-08-11: the 12-tester/14-day closed-testing gate is per-app, not per-account** (confirmed by Mikhil's own research after this doc previously assumed otherwise). Mikhil has a second app on the same account already in internal testing, but it has **not** started its own 14-day clock either — so CONTINUE? gets no head start from it. Each app clears the gate independently. This makes starting CONTINUE?'s closed test **the single biggest schedule risk in the project** — see `docs/01-PLAY-STORE-CRITICAL-PATH.md`. |
 | **18 tester Gmail addresses** | ⏳ Not yet collected | Starts the 14-day closed-testing clock | User is confident about reaching 20 when needed. Collect into a Google Group now — the account is live, nothing is blocking this anymore. **This is the next highest-priority action in the whole project.** |
 | **Keystore backed up** | ✅ **Confirmed backed up by Mikhil, 2026-08-12.** Generated at `app/keystore/continue-release.jks`, passwords in gitignored `key.properties` | Signing the release bundle | Closed. Don't re-ask. |
-| **Signed release App Bundle (.aab)** | ✅ `versionCode 1`/`0.1.0` **uploaded to Internal testing 2026-08-11**. ⚠️ `versionCode 2` and `3` were built but **never uploaded** — both superseded, don't upload them. ✅ **`versionCode 4`/`0.4.0` is BUILT AND SIGNED** at `app/build/outputs/bundle/release/app-release.aab` (2026-08-15, 32.4 MB, signer cert valid to 2056) — **just upload it**. Carries everything from 3 (image-quality fixes, share-sheet exit/overlay fix, GO PRO paywall, dispenser deal animation, offline share-matching index) plus the 2026-08-15 phone-layout round: coin counter scoped to DRAW/YOU, the DRAW nav button centred on its own slot, PILE scrolling as one surface, DRAW's dials collapsible with the lever always pullable, and offline cover caching | Play Console Internal testing track | `versionCode 2` carries the app-side half of the 2026-08-12 fix (empty-response fallback, `PULL THE LEVER` placeholder removed). Note the *root* fix was server-side, so `versionCode 1` already shows games without reinstalling. For every future build `versionCode` must strictly increase (Play rejects a repeat/lower code on any track); `versionName` is cosmetic. Rebuild with `JAVA_HOME=/c/Android/jdk21/jdk-21.0.12+8 ./gradlew bundleRelease` after bumping both in `app/build.gradle.kts` lines 33-34. |
+| **Signed release App Bundle (.aab)** | ✅ **`versionCode 6` / `0.6.0` is BUILT AND SIGNED** at `app/build/outputs/bundle/release/app-release.aab` (2026-08-24 08:51, 32.4 MB, `jarsigner -verify` clean, cert valid to 2056), carrying the whole 2026-08-23 tester-feedback round. **It is 6, not 5, because `versionCode 5` was already consumed by Internal testing** — always check what a track has already seen before picking the next number. History: `versionCode 1` uploaded to Internal 2026-08-11; 2, 3, 4 and 5 also went to Internal; the *Closed* track has stayed on `versionCode 4` since it went live 2026-08-19, and moves to `versionCode 6` on 2026-08-24. | Play Console Internal + Closed testing tracks | For every future build `versionCode` must strictly increase (Play rejects a repeat or lower code **on any track**, which is exactly how 5 got burned). Mikhil keeps `versionName` in step with it. Rebuild with `JAVA_HOME=/c/Android/jdk21/jdk-21.0.12+8 ./gradlew bundleRelease` after bumping both in `app/build.gradle.kts` lines 33-34, then read the version back out of the bundle itself (`unzip -p …aab base/manifest/AndroidManifest.xml`) rather than trusting the Gradle file. |
+| **Tester engagement, not just tester count** | 🔴 **Open — new 2026-08-24.** 12 feedback items in the first 3 days, 5-7 confirmed testing across all 3, but at ~2-3 min/day | Production access approval | Google's own page (support.google.com answer/14151465) has **two** hurdles. The clock is pure opt-in: "at least 12 testers … opted in continuously for the preceding 14 days". The *application form* separately asks for "details about tester engagement … **Whether testers used all available app features**" and "**Whether tester usage matched expected production user behavior**", and Google reviews the submission. So thin usage clears the clock and is a real risk at review. **Action: send testers an explicit list of features to exercise** (share target, DRAW lever, RANK, Stacks, STACK swipe, paywall, rewarded ad) so that question can be answered truthfully, and write the application around specific feedback received → fixes shipped. Earliest apply date is 2026-09-02. |
+| **Exclude EEA/UK/CH from country availability** | 🔴 **Decided 2026-08-24, not yet done** | Ads policy — replaces the missing UMP/CMP consent flow | Chosen over building a consent flow, which isn't worth the complexity at this stage. ⚠️ **Check where the current closed testers are first.** Country availability is per track; excluding a country a tester lives in removes their access, drops them out of the count and restarts *their* 14 days. Safest order: restrict **production** availability only and leave the closed track open, or confirm no tester is in an excluded country before touching the closed track. |
 
 ## 🟡 Needed later — not blocking current work
 

@@ -1,6 +1,6 @@
 import type { Env, GameDto, GameProvider, ResolveCandidate, ResolveResponse } from "../types.ts";
 import { rankedCandidates, verifyAgainstText } from "./candidates.ts";
-import { looksLikeUrl, resolveUrlToText } from "./resolveUrl.ts";
+import { extractUrl, resolveUrlToText } from "./resolveUrl.ts";
 import { cached, CacheTtl } from "../kv.ts";
 
 /**
@@ -68,8 +68,9 @@ async function matchCandidates(
 
 /**
  * The full `/resolve` pipeline — docs/05-TECH-ARCHITECTURE.md §`/resolve`. Stage 1 (URL to
- * text) only runs when the shared text actually looks like a bare URL; plain captions skip
- * straight to Stage 2.
+ * text) runs whenever a recognised link appears **anywhere** in the shared text, with or
+ * without a scheme; text around the link is kept and searched alongside whatever the link
+ * resolves to. Plain captions skip straight to Stage 2.
  */
 export async function resolveGame(
   env: Env,
@@ -81,23 +82,40 @@ export async function resolveGame(
   let resolvedTitle: string | null = null;
   let source = "text";
 
-  if (trimmed && looksLikeUrl(trimmed)) {
-    const cacheKey = `resolve:url:${trimmed}`;
-    const urlResolution = await cached(env, cacheKey, CacheTtl.RESOLVE, () => resolveUrlToText(trimmed));
-    resolvedTitle = urlResolution.text;
+  // A link anywhere in the text counts, not just one the text *starts* with. Captions like
+  // "this boss is insane https://youtu.be/…" are the common shape and used to skip Stage 1
+  // entirely — the video was never looked up, and the URL went into the IGDB search verbatim.
+  const link = trimmed ? extractUrl(trimmed) : null;
+
+  if (link) {
+    const urlResolution = await cached(env, `resolve:url:${link.url}`, CacheTtl.RESOLVE, () =>
+      resolveUrlToText(link.url),
+    );
     source = urlResolution.source;
 
-    if (resolvedTitle === null) {
-      // Instagram and anything else unresolvable server-side — never dead-end, hand back to
-      // the app's manual search field with the ladder's rung 3 (docs/02-PRODUCT-SPEC.md §2a).
-      return { resolvedTitle: null, source, candidates: [], needsManualEntry: true };
+    // Whatever the user typed around the link is evidence too, and is often where the game name
+    // actually is — the platform's own title can be pure channel branding.
+    const caption = trimmed.replace(link.matched, " ").replace(/\s+/g, " ").trim();
+    const combined = [urlResolution.text, caption].filter((part) => part && part.length > 0).join(" ").trim();
+
+    // Instagram killed public oEmbed, so its links resolve to nothing — but a subject line
+    // (some share sheets send one) is still real text worth trying before giving up.
+    const subjectFallback = subject && !extractUrl(subject) ? subject.trim() : "";
+    resolvedTitle = combined || subjectFallback || null;
+
+    if (!resolvedTitle) {
+      // Never dead-end — hand back to the app's manual search field with the ladder's rung 3
+      // (docs/02-PRODUCT-SPEC.md §2a). `suggestion` is null rather than the URL: offering a
+      // link as though it were a game title is worse than offering nothing, because the user
+      // has to clear the field before they can type.
+      return { resolvedTitle: null, source, candidates: [], needsManualEntry: true, suggestion: null };
     }
   } else {
     resolvedTitle = trimmed || subject || null;
   }
 
   if (!resolvedTitle) {
-    return { resolvedTitle: null, source: "empty", candidates: [], needsManualEntry: true };
+    return { resolvedTitle: null, source: "empty", candidates: [], needsManualEntry: true, suggestion: null };
   }
 
   const searchStrings = rankedCandidates(resolvedTitle);
@@ -113,5 +131,9 @@ export async function resolveGame(
     source,
     candidates,
     needsManualEntry: candidates.length === 0,
+    // The best *guess at a game name*, for the app to put in the manual-entry field when
+    // nothing matched. It comes from the same ranking the searches used, so it's the cleanest
+    // fragment we have — and because it is built by the title parser it can never be a URL.
+    suggestion: searchStrings[0] ?? null,
   };
 }

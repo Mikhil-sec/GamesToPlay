@@ -79,7 +79,17 @@ private fun PileSizeStep(onAnswer: (PileSizeAnswer) -> Unit) {
         color = ContinueColors.TextPrimary,
         textAlign = TextAlign.Center,
     )
-    androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = ContinueSpacing.XL.dp))
+    androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = ContinueSpacing.MD.dp))
+    // The share target is how this app is *meant* to be used, and onboarding used to end
+    // without ever mentioning it — leaving the headline feature discoverable only by accident.
+    Text(
+        text = "Already the best way: when a game shows up in a TikTok or a YouTube video, " +
+            "share it and pick CONTINUE?. It'll work out which game it is.",
+        style = ContinueTextStyles.body,
+        color = ContinueColors.TextSecondary,
+        textAlign = TextAlign.Center,
+    )
+    androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = ContinueSpacing.LG.dp))
     Column(verticalArrangement = Arrangement.spacedBy(ContinueSpacing.SM.dp), modifier = Modifier.fillMaxWidth()) {
         Button(onClick = { onAnswer(PileSizeAnswer.UNDER_20) }, modifier = Modifier.fillMaxWidth()) {
             Text("UNDER 20")

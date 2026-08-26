@@ -10,6 +10,10 @@
 const NOISE_PATTERNS: RegExp[] = [
   /https?:\/\/\S+/g,
   /www\.\S+/g,
+  // Scheme-less links: share sheets hand over "youtu.be/abc" and "instagram.com/reel/xyz"
+  // just as often as full URLs, and without this they survive cleaning and end up offered to
+  // the user as though they were a game title.
+  /[\w-]+(?:\.[\w-]+)+\/\S*/g,
   /\[[^\]]*]/g,
   /\([^)]*\)/g,
   /\br\/\w+/gi,

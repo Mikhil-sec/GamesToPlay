@@ -9,6 +9,7 @@ import com.mikhilnaika.continueapp.core.data.dao.DrawDao
 import com.mikhilnaika.continueapp.core.data.dao.GameDao
 import com.mikhilnaika.continueapp.core.data.dao.PileDao
 import com.mikhilnaika.continueapp.core.data.dao.RankingDao
+import com.mikhilnaika.continueapp.core.util.estimatedHours
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -106,8 +107,8 @@ class ProfileViewModel @Inject constructor(
             it.copy(
                 thisYear = ThisYearStats(
                     gamesCleared = completed.size,
-                    hoursCleared = completed.sumOf { e -> e.playtimeHoursNormally ?: 0 },
-                    longestGameHours = completed.maxOfOrNull { e -> e.playtimeHoursNormally ?: 0 } ?: 0,
+                    hoursCleared = completed.sumOf { e -> e.estimatedHours ?: 0 },
+                    longestGameHours = completed.maxOfOrNull { e -> e.estimatedHours ?: 0 } ?: 0,
                     fastestClearDays = fastestDays,
                     currentStreakDays = streak,
                 )

@@ -1,4 +1,4 @@
-import type { Env, GameProvider, SearchResponse } from "./types.ts";
+import type { Env, GameProvider, GenreRef, SearchResponse } from "./types.ts";
 import { cached, CacheTtl } from "./kv.ts";
 import { SeedGameProvider } from "./providers/SeedGameProvider.ts";
 import { IgdbGameProvider } from "./providers/IgdbGameProvider.ts";
@@ -100,6 +100,36 @@ export default {
 
       if (url.pathname === "/games/short" && request.method === "GET") {
         const results = await cached(env, "short", CacheTtl.SHORT, () => provider.shortAndSweet());
+        return json({ results } satisfies SearchResponse);
+      }
+
+      if (url.pathname === "/games/new" && request.method === "GET") {
+        const results = await cached(env, "new", CacheTtl.NEW_RELEASES, () => provider.newReleases());
+        return json({ results } satisfies SearchResponse);
+      }
+
+      if (url.pathname === "/games/gems" && request.method === "GET") {
+        const results = await cached(env, "gems", CacheTtl.HIDDEN_GEMS, () => provider.hiddenGems());
+        return json({ results } satisfies SearchResponse);
+      }
+
+      /**
+       * A genre rail, addressed by **name** because that's what the app has — the genre strings
+       * on its own cached games — and it should never have to hardcode IGDB's ids.
+       *
+       * The name is resolved to an id in memory against a cached copy of the whole genre table,
+       * and only the resolved id is ever used as a cache key. That ordering is the point: keying
+       * on the client's string instead would let anyone mint unlimited KV entries, against a
+       * 1,000 writes/day quota that is the tightest limit in the whole stack (docs/12-SECURITY.md).
+       * Unresolvable names cost one cheap lookup and write nothing.
+       */
+      if (url.pathname === "/games/genre" && request.method === "GET") {
+        const name = sanitizeQuery(url.searchParams.get("name"));
+        if (!name) return json({ results: [] } satisfies SearchResponse);
+        const table = await cached<GenreRef[]>(env, "genres", CacheTtl.GENRES, () => provider.genres());
+        const match = table.find((g) => g.name.toLowerCase() === name.toLowerCase());
+        if (!match) return json({ results: [] } satisfies SearchResponse);
+        const results = await cached(env, `genre:${match.id}`, CacheTtl.GENRE, () => provider.byGenre(match.id));
         return json({ results } satisfies SearchResponse);
       }
 

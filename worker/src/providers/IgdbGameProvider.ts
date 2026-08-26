@@ -1,4 +1,4 @@
-import type { Env, GameDto, GameProvider } from "../types.ts";
+import type { Env, GameDto, GameProvider, GenreRef } from "../types.ts";
 import type { TwitchAuthClient } from "../twitch/TwitchAuthClient.ts";
 
 const IGDB_BASE = "https://api.igdb.com/v4";
@@ -219,5 +219,62 @@ export class IgdbGameProvider implements GameProvider {
         `${MAIN_GAMES_ONLY} & cover != null; sort total_rating_count desc; limit 20;`,
     );
     return games.map((game) => toDto(game, byGameId.get(game.id)));
+  }
+
+  /**
+   * NEW RELEASES — the notable games of the last six months, **not** the most recent ones.
+   *
+   * Sorting by `first_release_date desc` was tried first and produced a rail of games nobody
+   * has heard of: the newest thing in IGDB at any moment is whatever indie was catalogued
+   * this morning. Ordering the same window by rating count instead surfaces the releases a
+   * backlog actually accumulates, which is the point of the rail.
+   *
+   * `game_status = null` is the "fully released" case — it drops early-access and alpha
+   * entries, which are exactly the things you can't sensibly add to a pile yet. (Note it is
+   * `game_status`, not the deprecated `status`; see the GAME_TYPE_MAIN_GAME comment above for
+   * why filtering on a dead IGDB field fails silently rather than loudly.)
+   */
+  async newReleases(): Promise<GameDto[]> {
+    const now = Math.floor(Date.now() / 1000);
+    const sixMonthsAgo = now - 60 * 60 * 24 * 180;
+    const games = await this.query<IgdbGame>(
+      "games",
+      `fields ${GAME_FIELDS}; where ${MAIN_GAMES_ONLY} & cover != null & ` +
+        `first_release_date > ${sixMonthsAgo} & first_release_date < ${now} & ` +
+        `total_rating_count > 3 & game_status = null; sort total_rating_count desc; limit 20;`,
+    );
+    return this.withPlaytimes(games);
+  }
+
+  /**
+   * HIDDEN GEMS — **critic** score, not the blended `total_rating`.
+   *
+   * Built on `total_rating > 80 & total_rating_count > 5` first, and the result was a rail of
+   * meme entries: a handful of user ratings is enough to put a joke listing at 100/100, so the
+   * first page came back as *Bubsy 3D* and *PokéOne*. `aggregated_rating` is press coverage,
+   * which nothing brigades, and requiring several outlets filters the rest. Capping
+   * `total_rating_count` is then what makes it *hidden* rather than merely good.
+   */
+  async hiddenGems(): Promise<GameDto[]> {
+    const games = await this.query<IgdbGame>(
+      "games",
+      `fields ${GAME_FIELDS}; where ${MAIN_GAMES_ONLY} & cover != null & ` +
+        `aggregated_rating > 82 & aggregated_rating_count >= 5 & total_rating_count < 200; ` +
+        `sort aggregated_rating desc; limit 20;`,
+    );
+    return this.withPlaytimes(games);
+  }
+
+  async genres(): Promise<GenreRef[]> {
+    return this.query<GenreRef>("genres", "fields id, name; limit 50; sort id asc;");
+  }
+
+  async byGenre(genreId: number): Promise<GameDto[]> {
+    const games = await this.query<IgdbGame>(
+      "games",
+      `fields ${GAME_FIELDS}; where ${MAIN_GAMES_ONLY} & cover != null & ` +
+        `genres = (${genreId}) & total_rating_count > 10; sort total_rating_count desc; limit 20;`,
+    );
+    return this.withPlaytimes(games);
   }
 }

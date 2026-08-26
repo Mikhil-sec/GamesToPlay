@@ -41,6 +41,21 @@ class WorkerGameDataSource @Inject constructor(
         fromSeed = { fallbackRandom().filter { (it.playtimeHoursNormally ?: Int.MAX_VALUE) < 8 } },
     )
 
+    override suspend fun newReleases(): List<GameDto> = fromWorkerOrSeed(
+        fromWorker = { api.newReleases().results },
+        fromSeed = { fallbackRandom().sortedByDescending { it.released.orEmpty() } },
+    )
+
+    override suspend fun hiddenGems(): List<GameDto> = fromWorkerOrSeed(
+        fromWorker = { api.hiddenGems().results },
+        fromSeed = { fallbackRandom().filter { (it.metacritic ?: 0) >= 80 } },
+    )
+
+    override suspend fun byGenre(genreName: String): List<GameDto> = fromWorkerOrSeed(
+        fromWorker = { api.byGenre(genreName).results },
+        fromSeed = { fallbackRandom().filter { genreName in it.genres } },
+    )
+
     /**
      * Falls back to the bundled seed set when the Worker throws **or answers with an empty
      * list**.

@@ -81,6 +81,73 @@ class OfflineGameIndexTest {
         assertTrue(hit!!.any { it.name.contains("Baldur's Gate", ignoreCase = true) })
     }
 
+    /**
+     * End to end against the **real shipped index**, on the exact string a closed tester
+     * shared on 2026-08-23: "Resident Evil 9 Requiem" came back as the 1996 original.
+     *
+     * The index has always held the answer — id 347668 carries the alternative names
+     * `RE9`, `Resident Evil 9`, `Biohazard 9`, `Resident Evil 9: Requiem`. Two separate faults
+     * kept it hidden, and this asserts on the outcome rather than on either of them.
+     */
+    @Test
+    fun `the real index resolves a numbered sequel to the sequel, not the base game`() {
+        val index = loadRealIndex()
+        val candidates = OfflineGameIndex.matchIn(index, "Resident Evil 9 Requiem")
+
+        assertTrue("expected at least one match", candidates.isNotEmpty())
+        assertEquals("Resident Evil Requiem", candidates.first().name)
+        assertTrue(
+            "the sequel must be a confident answer, got ${candidates.first().confidence}",
+            candidates.first().confidence >= 0.85f,
+        )
+    }
+
+    /**
+     * Guards the flaw that had made the whole `alternative_names` half of this index dead
+     * weight: a hit found through an alternative name was scored against the *canonical* name,
+     * which by definition isn't the string in the caption, so it scored 0 and was discarded.
+     * "BG3" is the case the index was built for.
+     */
+    @Test
+    fun `a hit found through an alternative name survives verification`() {
+        val index = loadRealIndex()
+        val candidates = OfflineGameIndex.matchIn(index, "BG3 is amazing")
+
+        assertTrue(
+            "BG3 should resolve to Baldur's Gate, got $candidates",
+            candidates.any { it.name.contains("Baldur's Gate", ignoreCase = true) },
+        )
+    }
+
+    @Test
+    fun `a plain caption still resolves exactly as before`() {
+        val index = loadRealIndex()
+        val candidates = OfflineGameIndex.matchIn(index, "Elden Ring is brutal")
+        assertEquals("Elden Ring", candidates.first().name)
+        assertTrue(candidates.first().confidence >= 0.85f)
+    }
+
+    /**
+     * Reported 2026-08-23: this real YouTube title matched nothing at all.
+     *
+     * ALL-CAPS titles are common and defeat the proper-noun heuristic completely — every word
+     * looks like a title word, so the caption becomes one twelve-word "run" and the candidate
+     * budget goes on its prefixes. "Among Us" ranked 27th. It resolves at 0.742, which is
+     * deliberately not confident (two short words), so the share sheet offers it as a choice
+     * rather than asserting it — the right outcome for a game name buried in channel branding.
+     */
+    @Test
+    fun `a game name buried in an all-caps video title is still found`() {
+        val index = loadRealIndex()
+        val candidates = OfflineGameIndex.matchIn(
+            index,
+            "SIDEMEN AMONG US ULTIMATE DRAFT MODE: PICK EVERY ROLE IN THE GAME",
+        )
+
+        assertTrue("expected Among Us to be offered, got $candidates", candidates.isNotEmpty())
+        assertEquals("Among Us", candidates.first().name)
+    }
+
     @Test
     fun `cover image ids look like real IGDB CDN path segments, not URLs`() {
         val index = loadRealIndex()

@@ -104,3 +104,49 @@ export async function resolveUrlToText(rawUrl: string): Promise<UrlResolution> {
 export function looksLikeUrl(text: string): boolean {
   return /^https?:\/\//i.test(text.trim());
 }
+
+/**
+ * Hosts we know how to resolve, for the scheme-less case only. Deliberately *not* the SSRF
+ * allowlist — [resolveUrlToText] still decides what may actually be fetched. This list only
+ * decides whether a bare `youtu.be/abc` is worth treating as a link at all.
+ */
+const BARE_HOSTS = [
+  "youtu.be", "youtube.com", "tiktok.com", "vm.tiktok.com",
+  "instagram.com", "reddit.com", "store.steampowered.com",
+];
+
+const BARE_HOST_PATTERN = new RegExp(
+  `(?:www\\.)?(?:${BARE_HOSTS.map((h) => h.replace(/\./g, "\\.")).join("|")})\\/\\S*`,
+  "i",
+);
+
+export interface ExtractedUrl {
+  /** Always absolute and https — safe to hand to [resolveUrlToText]. */
+  url: string;
+  /** Exactly the substring that matched, so the caller can subtract it from the caption. */
+  matched: string;
+}
+
+/**
+ * Finds a shareable link **anywhere** in the text, not only at the start.
+ *
+ * Both halves of that matter and both were real bugs:
+ *  - `"this boss is insane https://youtu.be/…"` used to fail the "starts with http" test, so
+ *    the URL was never resolved *and* the whole string — URL included — got searched against
+ *    IGDB, which duly matched a game literally called *Insane* at 0.83 confidence.
+ *  - `"youtu.be/abc"` (no scheme, which is what several share sheets actually send) was
+ *    treated as plain prose and ended up shown to the user as a suggested game title.
+ */
+export function extractUrl(text: string): ExtractedUrl | null {
+  const withScheme = text.match(/https?:\/\/\S+/i);
+  if (withScheme) {
+    const matched = withScheme[0].replace(/[.,;:)\]]+$/, "");
+    return { url: matched, matched };
+  }
+  const bare = text.match(BARE_HOST_PATTERN);
+  if (bare) {
+    const matched = bare[0].replace(/[.,;:)\]]+$/, "");
+    return { url: `https://${matched}`, matched };
+  }
+  return null;
+}

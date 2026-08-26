@@ -40,6 +40,12 @@ data class ResolveResponse(
     val source: String,
     val candidates: List<ResolveCandidateDto> = emptyList(),
     val needsManualEntry: Boolean = false,
+    /**
+     * Cleanest available guess at a *game name*, for prefilling the manual-entry field. Null
+     * when the Worker had nothing better than a bare link — an empty field beats one the user
+     * has to clear first. Guaranteed never to contain a URL.
+     */
+    val suggestion: String? = null,
 )
 
 @Serializable

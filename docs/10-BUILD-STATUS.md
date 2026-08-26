@@ -5,16 +5,794 @@
 > what's next. Update it whenever you finish a chunk of work or discover something that
 > changes this picture — don't let it go stale like a comment nobody re-reads.
 >
-> Last updated: 2026-08-15 — a **second phone-test feedback round** (the first build Mikhil has
+> Last updated: 2026-08-26 — **the third closed-test feedback round**, and the first one to
+> contain a *crash*. Four items: the STACK crash reported by three testers and carried in two
+> Play Console issues (**root-caused and fixed** — one missing `remember` key), no way to undo an
+> accidental add (**REMOVE FROM PILE added**), the paywall's lifetime CTA reading "INSERT COIN"
+> (**now "PURCHASE"**), and TikTok shares dead-ending on a chooser full of wrong games (**they now
+> go straight to a blank field with an explanation**). Also confirmed closed: the DISCOVER →
+> pile bug left open on 2026-08-23 — it was the **RETIRED** category all along, not a lost write.
+> See the 2026-08-26 entry immediately below. **`versionCode 7` / `0.7.0` is built and signed**,
+> carrying all of it — `app/build/outputs/bundle/release/app-release.aab` (32.4 MB, signer valid
+> to 2056, `jarsigner -verify` clean). **Not yet uploaded to any track** — testers are still on
+> `versionCode 6`; getting this onto Closed is next.
+>
+> Previous entry: 2026-08-23 — **the second closed-test feedback round**: five items reported,
+> four fixed in code (playtime accuracy, share auto-match accuracy, DISCOVER's clear button
+> and add-confirmation, STACK's swipe hint). The fifth — "games added from DISCOVER never
+> reached the pile" — **has no reproducible root cause yet**; what shipped is the set of
+> changes that make it visible and make the write robust. See the 2026-08-23 entry
+> immediately below, and **the open question at the end of it**. `versionCode 5`/`0.5.0` was
+> superseded by **`versionCode 6` / `0.6.0`** (5 was already used on Internal testing), built
+> 2026-08-24 08:51 and carrying all of it; it goes to the Closed track on 2026-08-24.
+>
+> Previous entry: 2026-08-19 (latest) — **the share target's accuracy bugs are fixed** (four of
+> them, found by reproducing a tester report against production), and **`versionCode` 2/3/4 were
+> all confirmed uploaded to Internal testing** (earlier entries wrongly said only 1 was ever
+> uploaded — see §RevenueCat below and the 🔴 table in `docs/09-PENDING-INPUTS.md`). Earlier the
+> same day: **closed testing is live**, `versionCode 4` is the build on the *Closed* track, and
+> the clock started **2026-08-19**, so the earliest production-access application is
+> **2026-09-02**. Built this day: the **STACK view**, **three new DISCOVER rails**
+> (deployed and verified in production), and the first copy anywhere in the app that tells a user
+> the **share target exists**. **`versionCode 5`/`0.5.0` is signed and built, not yet uploaded to
+> either track** — that's Mikhil's next action, not blocked on anything. The 14 days of waiting
+> are build time, not dead time.
+>
+> Previous entry: 2026-08-15 — a **second phone-test feedback round** (the first build Mikhil has
 > run on both a phone and the tablet). Five items reported, all layout/ergonomics; four needed
 > work, all four are fixed below. The paywall and the new dispenser deal animation were both
 > called out as working well on glass — **those two are now device-verified**, which closes the
 > single biggest gap from the previous entry.
 >
-> **A signed `versionCode 4` / `0.4.0` `app-release.aab` is built and current** at
-> `app/build/outputs/bundle/release/` (32.4 MB, signer cert valid to 2056), carrying everything
-> below. `versionCode 3` was **never uploaded** — upload this one instead.
+> **A signed `versionCode 5` / `0.5.0` `app-release.aab` is built and current** at
+> `app/build/outputs/bundle/release/` (32.4 MB, built 2026-08-19 19:22, signer cert valid to
+> 2056), carrying everything below plus the STACK view, DISCOVER rails, and share-target fixes
+> — **not yet uploaded to any track**, that's next.
 > Rebuild after any further app change: `JAVA_HOME=/c/Android/jdk21/jdk-21.0.12+8 ./gradlew bundleRelease`.
+>
+> **Correction, 2026-08-19: `versionCode` 2, 3, and 4 were all uploaded to *Internal* testing**
+> (Mikhil confirms), not just 1 as earlier entries here claimed — confirmed independently via
+> RevenueCat, which shows real customer records tagged `0.2.0` and `0.3.0`. Only *Closed*
+> testing has stayed on `versionCode 4` throughout; Internal testing has been iterated on the
+> whole time. "Never uploaded" below refers only to the Closed track.
+
+---
+
+## 2026-08-26 — third closed-test feedback round: the STACK crash, and three fixes
+
+The first round to contain a crash, and the first one where a tester handed over a reliable
+reproduction. Four items, all fixed. One item from the previous round is also closed.
+
+### 0. Closed: "games added from DISCOVER never reached the pile"
+
+Left open on 2026-08-23 with no reproducible root cause. There wasn't one — the games *were*
+written, into the **RETIRED** tab, and the tester was looking at THE PILE. Not a lost write, and
+nothing to fix in the write path. The robustness and visibility changes made on 2026-08-23 were
+worth keeping regardless, but they were not the fix, because there was nothing to fix.
+
+### 1. The STACK crash — one missing `remember` key
+
+Three testers hit it; Play Console carries it as two issues (3 users affected and 1), which are
+the same bug landing on differently-sized lists:
+
+```
+java.lang.IndexOutOfBoundsException: Index: 7, Size: 1
+java.lang.ArrayIndexOutOfBoundsException: length=2; index=2
+  at ...PileStackView$6.invoke (PileStackView.kt:251)
+```
+
+Line 251 was the caption's `entries[anchor]`. `anchor` came from
+
+```kotlin
+val anchor by remember { derivedStateOf { position.value.roundToInt().coerceIn(0, lastIndex) } }
+```
+
+`remember` with **no key**, so the lambda closed over `lastIndex` from the *first* composition
+and kept clamping to that number for the life of the composable. Everything else follows:
+
+- **List shrinks** (switch to a shorter tab, a filter cutting the results, a game moving out of
+  the current state): `anchor` stays clamped to the old, larger ceiling, and `entries[anchor]`
+  indexes past the end of the new list. `Index: 7, Size: 1` is exactly "scrolled to card 8 of 8,
+  then switched to a tab holding one game" — the tester's RETIRED → WANTED reproduction.
+- **List grows** (the pile filling in after the first frame): `anchor` is capped *below* the real
+  end, so the cards freeze while `position` — which the drag handler correctly clamps against the
+  *live* `lastIndex`, and which the per-card haptic reads unclamped — keeps running underneath.
+  That is the other half of the tester's report verbatim: the last card leaves, nothing is drawn,
+  and the phone still buzzes once per card as you keep flicking at an empty stack. The cards
+  weren't gone, they were transformed to a depth well past the exit and therefore invisible,
+  which is why flicking back down brought them all back.
+
+The two `LaunchedEffect`s that pull `position` back into range (`resetKey` and `lastIndex`) can't
+save it: they run *after* the composition that swapped the list, so composition has to survive a
+position belonging to the previous list on its own.
+
+Fixed by making every read of the position-as-an-index clamp against the list being indexed right
+now — `remember(lastIndex)`, a clamped `positionProvider` so the visuals can't spend a frame past
+the end either, and the tap handler clamping against `currentEntries` rather than the list its
+`pointerInput` was keyed on. The clamp is now a named pure function, `stackAnchor(position,
+lastIndex)`, precisely so it can be tested without Compose: `StackAnchorTest` restates both Play
+Console stack traces as arithmetic.
+
+**Worth generalising:** `remember { derivedStateOf { … } }` silently freezes every non-`State`
+value the lambda touches. It is only safe when the lambda reads *nothing* but snapshot state.
+`lastIndex` is a plain `Int` derived from a parameter, and that was enough.
+
+### 2. No way to remove an accidentally added game
+
+RETIRED was the only exit, and it is not the same thing — it's a *decision* ("letting this one
+go") that PROFILE counts toward the "retire 10 games" trophy. A game shared in by mistake was
+never in the pile in any meaningful sense.
+
+`REMOVE FROM PILE` now sits at the bottom of the pile action menu under its own `OR` heading, in
+`AccentHot`, deliberately outside the `MOVE TO` list so it can't be mis-tapped as a sixth
+destination. It confirms in a dialog that names the game and points at RETIRED as the thing they
+probably meant, with the safe choice in the default position.
+
+It sweeps `stack_members` and `rankings` as well as `pile_entries`: neither has a foreign key
+back to the pile entry, so without that the game keeps appearing inside its stacks and holding
+its slot in RANK with no row behind it. The cached `games` row is deliberately **kept** — that's
+shared cache, not user data, and dropping it would force a network round trip if the same game is
+added back or shows up in DISCOVER.
+
+### 3. The paywall's lifetime CTA said "INSERT COIN"
+
+Next to the monthly tier's "SUBSCRIBE". Worse than inconsistent: "INSERT COIN" is the app's label
+for *earning* a coin by watching a rewarded ad (`DrawGateScreen`), so on the one screen that takes
+real money it pointed at the wrong mental model entirely. Now `PURCHASE ▸`, keeping the caps and
+the chevron the rest of the paywall uses.
+
+### 4. TikTok shares dead-ended on a chooser full of wrong games
+
+TikTok's oEmbed *does* return something — but it returns the video's **caption**, which is written
+for the algorithm, not a title. Read off production on 2026-08-26:
+
+| shared text | resolvedTitle | what the app showed |
+|---|---|---|
+| `https://vm.tiktok.com/ZMSkFqPxY/` | `Пользуйтесь на здоровье👍 #юмор` | blank field (nothing matched) |
+| `Check this out https://www.tiktok.com/@…/video/…` | `Check this out` | *Check-In*, *Check Inn*, *Wai-wai Check!* — all 0.425 |
+
+The second row is the failure mode: a caption with no game in it still scores just high enough to
+fill the chooser, so the tester has to notice the list is wrong, back out, and type the name
+anyway. TikTok is the one source where a near miss is worse than no guess.
+
+So: a share carrying a tiktok.com link now skips the middle rung. A **confident** hit is still
+offered as one tap — that's strictly better than a blank field and it does happen — but anything
+short of confident goes straight to an empty manual-entry field carrying its own copy: *"TikTok
+doesn't hand over a video's title, so CONTINUE? can't match this one for you — type the game's
+name."* That replaces "Couldn't match that automatically", which reads as a fault the app might
+fix on a retry rather than as how that source works.
+
+Detection is a **host-label** match, not `contains("tiktok.com")` — the same distinction
+`worker/src/security.ts` already makes, for the same reason it's easy to get wrong. `vm.tiktok.com`
+and `vt.tiktok.com` count; `tiktok.com.example.org` and `eviltiktok.com` don't. `TikTokLinkTest`
+covers both directions. Screenshot shares deliberately don't take this path — OCR text stands on
+its own merits whatever app it was captured in.
+
+Separately, the Worker's `suggestion` now goes back through `TitleParser` on the app side before
+it reaches the field. The Worker documents it as never containing a URL and it never has in
+testing, but this field is the one place in the app where being wrong costs the user a
+select-all-and-delete before they can type, so the guarantee is now enforced on the side that
+suffers if it breaks. The re-clean is a no-op on already-cleaned text (every rule in the table is
+a removal, so it's idempotent).
+
+### Verified
+
+`./gradlew testDebugUnitTest` — **84 tests, 0 failures**, including 12 new ones across
+`StackAnchorTest` (5), `ShareResolutionStateTest` (5) and `TikTokLinkTest` (2).
+
+**Not device-verified.** `versionCode 7` / `0.7.0` **is built and signed** —
+`./gradlew bundleRelease` succeeded clean, `jarsigner -verify` reports "jar verified" with the
+same signer (valid to 2056), output is `app/build/outputs/bundle/release/app-release.aab`
+(32.4 MB). **Not yet uploaded to any track** — testers are still on `versionCode 6`. The STACK
+crash fix is the reason to make the upload the next action rather than batching more work onto
+this bundle — it is the only known crash in the app, three testers have hit it, and it is in
+PILE's *default* view.
+
+### Also worth having on the record
+
+Confirmed good on glass this round, from tester feedback: STACK's swipe hint, DISCOVER's
+add-confirmation banner, and the new playtime labels. All three were 2026-08-23 changes shipped
+blind in `versionCode 6`; all three landed.
+
+---
+
+## 2026-08-23 — second closed-test feedback round
+
+Five items from testers. Four are fixed and covered by tests; the fifth is still open and is
+the most important thing in this entry.
+
+### 1. "Minecraft says 900 hours" — IGDB's playtime data, and what the app prints
+
+Not a mapping bug. IGDB's `game_time_to_beats` genuinely returns
+`hastily 98 / normally 956 / completely 20417` for *Minecraft: Java Edition*, and the app was
+printing `normally` verbatim everywhere. Read off the production Worker on 2026-08-23:
+
+| game | hastily | normally | completely |
+|---|---|---|---|
+| Portal 2 | 4 | 9 | 28 |
+| Stardew Valley | 50 | 90 | 208 |
+| Skyrim | 25 | 109 | 201 |
+| Baldur's Gate III | 128 | **132** | 5650 |
+| Counter-Strike | 9 | **15** | 761 |
+| Minecraft: Java Ed. | 98 | **956** | 20417 |
+
+Two things this makes clear. The three fields track HowLongToBeat's Main / Main+Extras /
+Completionist, so `normally` running *above* a Google search's headline number is normal and
+expected — but on a sandbox or live-service game the later fields collect *lifetime playtime*
+rather than time-to-an-ending. And the pollution is **per field, not per game**: Baldur's Gate
+3's `completely` is nonsense while its `normally` is spot on, so "distrust this game" would be
+the wrong shape of fix.
+
+`core/util/Playtime.kt` is a plausibility ladder over the three values — `normally`, then
+`hastily`, then `completely`, taking the first that is `0 < h <= 300`, and reading "ENDLESS"
+when none is. Minecraft falls through to 98 HRS, which is both defensible and inside the
+50-200 range the tester expected; every game in the table above is unchanged. 300 sits clear
+above the longest believable campaign in the sample (132) and well below 956.
+
+Deliberately computed **at read time from the three columns already in Room**, not stamped in
+by the Worker: no schema migration, it retroactively fixes every row already cached on every
+tester's device, and it still works offline. Applied to PILE (all three views), the pile-hours
+total and its `FINISHED BY` estimate, PROFILE's stats, the shared pile card, and DRAW's time
+budget — DRAW keeps its own `hastily`-first preference, just with the same ceiling applied.
+`PlaytimeTest` asserts against the real figures in that table.
+
+### 2. "Resident Evil Requiem matched to Resident Evil OG"
+
+The Worker resolves that caption correctly today (verified against production, 1.00
+confidence, four phrasings), so this is a *scoring* bug reachable from either side rather than
+a missing-data one — and the arithmetic shows exactly how:
+
+`verifyAgainstText` scores a name by whole-word containment in the caption. `"Resident Evil"`
+inside `"Resident Evil Requiem"` scores **0.925** — over the 0.9 bar that stops the search
+early, and over the 0.85 bar that presents a result as *confident*. A strict prefix of a title
+beats the bar for being the whole answer, and nothing in the score ever noticed the leftover
+word. Any caption where the fuller title isn't returned first — a stale offline index, an IGDB
+`search` miss on a noisy string — lands on the older game with full confidence.
+
+Both ports now demote a match the caption itself says is incomplete: if the very next token in
+the **original** text is capitalised, isn't a stopword, and isn't video-title boilerplate
+(`official`, `trailer`, `reveal`, …), the score is capped at `FRAGMENT_CEILING = 0.84`. Under
+0.85 so it can't be confident, under 0.9 so it can't end the search, still high enough to lead
+the chooser when nothing better exists — which is what an offline-only device gets.
+
+Capitalisation in the *raw* text is the signal, so it can't be computed from the normalized
+string: a title carries on in caps ("Resident Evil **Requiem**"), prose does not ("Elden Ring
+**is** brutal"). Only the *following* word is examined — a capital at the start of a sentence
+is indistinguishable from a title word, so checking backwards would demote "Playing Hades
+tonight". A punctuation-only token between the two ("REQUIEM **-** Announcement Trailer") ends
+the title.
+
+Five assertions each in `worker/test/candidates.test.ts` and `GameNameCandidatesTest`, kept
+identical because the offline and online paths have to agree. **Consequence worth knowing:**
+"Elden Ring Shadow of the Erdtree is brutal" now prefers the DLC and, if the DLC isn't found,
+shows a chooser instead of confidently offering the base game. That is the intended trade —
+an extra tap beats a wrong one-tap add.
+
+**Correction, same session — the report was about "Resident Evil 9 Requiem", not
+"Resident Evil Requiem", and the number changes everything.** The first fix above is real but
+did not touch this case, and two further faults did.
+
+**Fault A — a digit is not "capitalized", so every numbered sequel broke its own title in
+half.** `properNounRuns` builds runs out of capitalised words; `'9'.isUpperCase()` is false, so
+"Resident Evil 9 Requiem" produced the runs `Resident Evil` + `Requiem`, and "Resident Evil 4"
+produced `Resident Evil`. The prefix was therefore tried *first* and won. Measured on the live
+Worker before the fix:
+
+| shared text | before |
+|---|---|
+| `Resident Evil 9 Requiem` | **Resident Evil @0.925** |
+| `Resident Evil 4 Remake is amazing` | **Resident Evil @0.925** beat Resident Evil 4 @0.840 |
+| `Final Fantasy 7 Rebirth` | **Final Fantasy @0.925** |
+
+This was never specific to RE9 — it affected every numbered sequel in the catalogue. Numbers
+now continue a run (never start one), a *following* sequel number counts as the title carrying
+on, and one or two digits only, so `Elden Ring 2024 gameplay` is still a year and not a sequel.
+
+The flat `FRAGMENT_CEILING` from the first fix also had to become a **multiplier**
+(`FRAGMENT_PENALTY`, ×0.84): in "Resident Evil 4 Remake" *both* candidates are incomplete
+matches, and clamping both to 0.84 threw away the only thing separating them. `scoreOf` tops
+out at 1.0, so a multiplier keeps the same guarantees (< 0.85 confident, < 0.9 early-stop) while
+preserving order.
+
+**Fault B — the entire `alternative_names` half of the offline index had never worked.**
+`verifyAgainstText` asks whether a name appears whole-word in the caption, and
+`OfflineGameIndex.match` asked that about the record's **canonical** name. An alternative name
+never shares its spelling with the canonical one — that is what makes it an alternative — so
+every alt-name hit scored 0 and was thrown away. Verified on the real shipped asset:
+
+```
+Resident Evil 9 Requiem -> Resident Evil Requiem : SCORES 0 -> DISCARDED
+BG3 is amazing          -> Baldur's Gate III     : SCORES 0 -> DISCARDED
+FF7 Rebirth             -> Final Fantasy VII Rebirth : SCORES 0 -> DISCARDED
+```
+
+The index has held the answer all along — id 347668 carries `RE9`, `Resident Evil 9`,
+`Biohazard 9`, `Resident Evil 9: Requiem`. Abbreviations and regional titles are precisely what
+shipping a 610 KB dump index was *for*, and none of them could ever win. Each hit is now scored
+against both the canonical name **and the key that found it**, best wins. That is safe because
+the key is not a free-text guess: it is a string taken from the user's own caption that turned
+out to be an exact IGDB name for that game, and both halves still verify against the caption.
+
+`OfflineGameIndex.matchIn` was split out of `match` so `OfflineGameIndexTest` can run the real
+scoring loop over the real shipped index from a plain JVM test — the RE9 and BG3 cases are both
+asserted there, not just their ingredients.
+
+**Third fix — matching through a number the official title omits.** IGDB says "Resident Evil
+Requiem"; the internet says "Resident Evil 9 Requiem". Whole-word containment fails on the
+interior digit, so `verifyAgainstText` now retries against a haystack with standalone sequel
+numbers dropped, scoring ×0.84. Deliberately not confident on its own: "Mass Effect 2 Legendary
+Edition" is structurally identical and there the user probably means Mass Effect 2.
+
+**Deployed 2026-08-23** (version `51e24d40`, all four bindings confirmed). Verified on live
+traffic after propagation — note a batch run seconds after `wrangler deploy` returned still hit
+a stale edge on one row, so **wait before verifying**:
+
+| shared text | after |
+|---|---|
+| `Resident Evil 9 Requiem` | **Resident Evil Requiem @0.840** → Resident Evil @0.777 |
+| `Resident Evil 4 Remake is amazing` | **Resident Evil 4 @0.819** → Resident Evil @0.777 |
+| `Final Fantasy 7 Rebirth` | **Final Fantasy VII @0.819** → Final Fantasy @0.777 |
+| `Resident Evil Requiem` | Resident Evil Requiem @1.000 |
+| `Elden Ring is brutal` | Elden Ring @0.900 — unchanged |
+| `Elden Ring 2024 gameplay` | Elden Ring @0.900 — the year is not a sequel |
+| `…items Pocketpair Palworld` | Palworld @0.850 — unchanged |
+| `a tale of two bush ganks League of Legends` | League of Legends @0.992 — unchanged |
+
+On device the **offline index answers first**, and there RE9 resolves at **1.000** (the caption
+is an exact alternative name), so the share sheet shows one confident tap rather than a chooser.
+Cross-checked against the real asset. `BG3 is amazing` now resolves at 0.808 — a chooser, but
+found at all for the first time.
+
+**The Android half still needs a new build to reach anyone.**
+
+### 2b. An ALL-CAPS YouTube title matched nothing
+
+Reported while testing: `SIDEMEN AMONG US ULTIMATE DRAFT MODE: PICK EVERY ROLE IN THE GAME`
+resolved to nothing at all. Two causes, both about the candidate *budget* rather than scoring.
+
+Capitalisation is the signal `properNounRuns` runs on, and an ALL-CAPS title has none — every
+word looks like a title word, so the whole caption becomes one twelve-word "run". The budget
+then goes entirely on that run's shrinking prefixes: `SIDEMEN AMONG US ULTIMATE DRAFT`,
+`SIDEMEN AMONG US`, `SIDEMEN`. Measured: **`"Among Us"` ranks 27th of 35 candidates**, past the
+Worker's 6-search budget and past the offline index's 24-candidate cap.
+
+The offline cap was raised to 64. It exists to stop a pathological caption burning CPU, and at
+24 it was far tighter than that needed — each attempt there is a hash lookup, not the IGDB
+request the Worker's budget of 6 is rationing. Swept across the captured-caption corpus at 24
+vs 64, **exactly one answer changes**: this one, from nothing to `Among Us @0.742`. The ranking
+already puts good candidates first, so a longer tail can only surface matches that were
+previously unreachable.
+
+0.742 is deliberately not confident — two short words — so the share sheet offers it as a
+choice rather than asserting it. For a game name buried in channel branding that is the right
+outcome. Asserted end to end against the real index in `OfflineGameIndexTest`.
+
+**The Worker still returns nothing for this shape**, because raising *its* budget means more
+IGDB requests against a 4/sec quota. On device the offline index answers first and covers it;
+a caption that only reaches the Worker (a link whose page title is ALL-CAPS) still won't match.
+Known, accepted, cheap to revisit if it shows up again.
+
+**Also still open, same class:** a hashtag can't verify offline. `#EldenRing` normalizes to the
+single token `eldenring`, so whole-word containment against `Elden Ring` fails and the hit is
+dropped — the same "matched on one string, scored against another" shape as the alt-name bug,
+but not fixed by the same change. The Worker's lexical fallback catches it at ~0.5, so it lands
+in the chooser rather than nowhere.
+
+### 3. DISCOVER needed a clear button
+
+Added, and only while there is something to clear. The field is the only way back to the rails,
+so clearing it was previously holding backspace across a whole game title.
+
+### 4. "Games added from DISCOVER never appeared in PILE or in DRAW" — still open
+
+**No root cause found.** Traced the whole write path — `addToPile` → `gameDao.upsert` →
+`pileDao.insert(state = BACKLOG)` → `observeByState(BACKLOG)` — plus every way a row could
+later vanish. Ruled out: destructive migrations (schema is v1, no
+`fallbackToDestructiveMigration`), `REPLACE` cascading through a foreign key (there is none
+from `pile_entries`), seed-id collisions (seed ids are all negative, all distinct), a state
+with no tab (all five states are tabs), and a `DrawSelector` filter excluding new games
+(unknown length never disqualifies). No device was attached this session to reproduce on.
+
+What shipped is the two things that are provably wrong regardless of the cause, plus the
+instrumentation to make the next report diagnosable:
+
+- **The write is now `NonCancellable`.** Tapping a card and then immediately tapping the nav
+  bar is the normal way to use this screen, and three suspending DAO calls in `viewModelScope`
+  are three chances for a cleared ViewModel to cancel the write halfway — losing the add
+  silently, with the tick already on screen. A few ms of local SQLite work isn't worth making
+  interruptible.
+- **`addedGameIds` now comes from Room** (`PileDao.observeAllGameIds`, deliberately not the
+  `games` join) instead of an in-memory set. The tick used to evaporate the moment you left the
+  screen, so a returning user couldn't tell an add from a no-op.
+- **Every tap now answers.** "X ADDED TO YOUR PILE" or "X IS ALREADY IN YOUR PILE" — the second
+  half is the tester's own suggestion. The search row's add button stays *enabled* when already
+  added, because a disabled button that does nothing on tap is how this ambiguity started.
+
+> **Open question for the next session — ask Mikhil before re-investigating.** Does the
+> affected tester see *any* games in their pile (share-target adds in particular), or is it
+> empty? "DISCOVER adds specifically are lost" and "nothing ever persists" are different bugs
+> with no shared cause, and the answer picks which one to chase.
+
+### 5. STACK gave no hint that it moves
+
+STACK is PILE's default view and its only gesture is a vertical drag that nothing asked for —
+a tester read the receding cards as decoration. Two breathing chevrons and the word SWIPE down
+the right edge, where they can't cover a cover. Dismissed on the **first drag** (not a timer,
+not a tap — the drag is the only event that proves the teach worked) and remembered in
+DataStore, so it's a one-time teach rather than a permanent label on the signature view.
+Hidden outright for a one-game pile.
+
+### Two decisions taken 2026-08-24 (not code)
+
+**The 12-tester gate has two hurdles, not one — an earlier reading of this was wrong.**
+Mikhil pushed back on it and was right. Google's own page (support.google.com
+answer/14151465) is unambiguous on both halves:
+
+- *The clock:* "At least 12 testers must be opted in to your closed test when you apply for
+  production access, and they must have been opted in continuously for the preceding 14 days."
+  No usage metric. Opt-in starts and satisfies this.
+- *The review:* the production-access form asks for "details about tester engagement during
+  your closed test, including: **Whether testers used all available app features**" and
+  "**Whether tester usage matched expected production user behavior**". Google reviews the
+  submission and can reject it.
+
+So the current tester behaviour — 12 people, 2-3 minutes a day, most of them in the first two
+days — clears the clock and is a **genuine risk at the review stage**. The actionable response
+is not more testers, it's directing the ones we have at specific features so the form can be
+answered truthfully. See `docs/01-PLAY-STORE-CRITICAL-PATH.md`. Tester-marketplace sites push a
+quantified version of this claim and all of them sell tester pools; the general point is
+Google's own, their thresholds are not.
+
+**EEA/UK/CH will be excluded from country availability rather than shipping a CMP.** The
+missing UMP/consent flow has been on the risk list since 2026-08-15 as an ads-policy gap.
+Decision: drop those countries instead of building consent — the complexity isn't worth it at
+this stage of the project.
+
+> ⚠️ **Do this in the right order.** Country availability applies per track. If any current
+> closed tester is in an excluded country they lose access, which drops them out of the count
+> and restarts *their* 14 days. **Check where the existing testers are before changing
+> availability**, and consider restricting production availability only, leaving the closed
+> track open.
+
+### What a fresh session should pick up
+
+1. **Answer the open question in item 4** — does the affected tester see *any* games in their
+   pile? Everything else about that bug is already ruled out; the answer picks which of two
+   unrelated causes to chase.
+2. **Device-verify this build.** The STACK swipe hint, the DISCOVER confirmation banner and the
+   playtime labels ("98 HRS" for Minecraft, "ENDLESS") have **never rendered on hardware**.
+3. **Build the single-game share card** — the "complete, rate, and share games" judging
+   criterion is the weakest of the three: CLEARED and RANK exist, but a game cannot be shared,
+   only the whole pile. `ShareCardRenderer` already does Canvas → PNG → FileProvider →
+   `ACTION_SEND` and the app holds no storage permission, so this is a `renderGameCard()` plus a
+   SHARE row in the existing action menu. **No Play data-declaration change**: a locally
+   rendered image handed to the system share sheet falls under the user-initiated-transfer
+   exemption. Setting `EXTRA_TEXT` to a caption containing the game name also gets the
+   "add this game" bridge for free — the app is already a share target that resolves game
+   names, so a recipient shares the message back into it. An `https://` App Link (the GitHub
+   Pages domain could host `assetlinks.json`) would make it one tap instead of two; deferred as
+   unnecessary risk before production access.
+4. **Still unbuilt from the spec:** Customer Center, FREE PLAY mode, 4 of the 5 share cards,
+   clipboard-nudge detection.
+5. **Submission kit** (`docs/07-SUBMISSION-KIT.md`) — video, Design Award and Catvertising
+   write-ups. Not started.
+
+### State after this session
+
+- `:app:testDebugUnitTest` green — 72 tests, 7 suites. `npm test` in `worker/` green — 45 tests.
+- Worker `tsc --noEmit` clean, **deployed** (version `51e24d40`) and verified on real traffic —
+  see the tables in item 2. `versionCode 4` testers already have the server-side half.
+- **No device was attached**, so none of this has been on glass. The STACK swipe hint and the
+  DISCOVER confirmation banner are both new UI that has never rendered on hardware.
+- **`versionCode 6` / `0.6.0` is built and current** (2026-08-24 08:51) and carries
+  everything above — `app/build/outputs/bundle/release/app-release.aab`, 32.4 MB, signed.
+  `versionCode 6` / `versionName 0.6.0` were read back out of the bundle's own manifest
+  rather than trusted from `build.gradle.kts`. **`versionCode 5` was already consumed by
+  Internal testing**, which is why this is 6 — check what a track has already seen before
+  assuming the next number. Mikhil is moving the Closed track off `versionCode 4` onto
+  this build on 2026-08-24.
+
+---
+
+## 2026-08-19 (latest) — reading RevenueCat: bot traffic, and the real tester count
+
+Mikhil asked how many unique users the app has and why some show as United States when he knows
+his testers are Mauritian. Both questions turned out to have the same answer, found by cross-
+referencing `list-customers` against `first_seen_at`/`last_seen_at`/`platform_version` rather
+than trusting the country field at face value — see [[verify-config-with-traffic-not-source]],
+same lesson applied to a metrics dashboard instead of a health check.
+
+**RevenueCat's "customer" count is anonymous installs, not people.** `ContinueApplication.kt`
+calls `Purchases.configure()` with no `appUserID` and the app never calls `logIn` — correct for
+an app with no accounts, but it means every reinstall or data-clear mints a fresh anonymous ID.
+39 total customers over 28 days against ~17 real testers is expected, not a red flag.
+
+**14 of the 39 "US" customers are Google's Play pre-launch device farm, not misattributed
+Mauritian IPs.** Three signals nailed it: every one of them is Android **API 30** exactly, while
+real Mauritius customers span API 31–36; `first_seen_at` equals `last_seen_at` to the millisecond
+for all of them (one launch, never returned); and they cluster tightly on build-upload days
+(3–4 at a time, minutes apart, on 2026-08-11/12/14/15) and are **absent** on days with no upload.
+Real geolocation is fine — nothing to fix here, and no CMP/consent-flow implication either.
+
+**Last 12 hours (2026-08-19, from the moment Mikhil posted to recruit testers): 16 new
+customers, 15 Mauritius + 1 Malaysia, zero US.** No farm noise in this batch — it's the tester
+wave landing, trickling in over the day rather than all at once, which is the expected shape for
+a social post reaching people at different times. Net of Mikhil's own ~4 manual reinstalls
+during testing, that's roughly a dozen real testers in one window alone.
+
+**For the Devpost writeup: never quote RevenueCat's raw customer/user count.** Quote the
+Mauritius-only figure, or describe the split explicitly — a judge who spots 14 single-session
+US installs on uniform Android 11 will read it exactly as this session did.
+
+---
+
+## 2026-08-19 (latest) — the share target was quietly broken, in four separate ways
+
+**The report:** shares from YouTube and Instagram put the raw URL — or a fragment of one — into
+the manual-entry field, so every fallback started by selecting and deleting a link. Mikhil's
+call, which is the right one: *a bare URL in the field is worse than an empty field, and a
+partial title is better than either.*
+
+Reproduced against the deployed Worker before changing anything. The single reported symptom
+turned out to be **four independent bugs**, only one of which was the prefill itself.
+
+### 1. The prefill fell back to the raw share text (app)
+
+`ShareTargetViewModel` held `lastRawText` and used it whenever resolution failed —
+`bestLocalGuess = localCandidates.firstOrNull() ?: text`, and `fallBackToManualEntry()` used the
+raw text directly. `TitleParser` correctly reduces a bare URL to *nothing*, and the `?: text`
+then put the URL back. Now there is a single `cleanPrefill()` that returns a cleaned fragment or
+**null**, and `lastPrefill` replaces `lastRawText` — so an unresolvable Instagram link yields an
+empty field, which is what was asked for.
+
+### 2. A link was only detected if the text *started* with one (Worker)
+
+`looksLikeUrl()` tested `/^https?:\/\//`, so the extremely common
+`"this boss is insane https://youtu.be/…"` shape skipped Stage 1 entirely: the video was never
+looked up, **and** the whole string including the URL went into the IGDB search, which duly
+matched a game literally called *Insane* at 0.83 confidence. Replaced with `extractUrl()`, which
+finds a link anywhere and returns the matched substring so the caller can subtract it — the
+surrounding caption is kept and searched alongside whatever the link resolves to. Verified:
+`"hollow knight silksong instagram.com/reel/…"` now resolves **Hollow Knight Silksong at 1.00**
+despite Instagram itself being unresolvable.
+
+### 3. Scheme-less links were treated as prose (both sides)
+
+Share sheets send `youtu.be/abc` without a scheme at least as often as with one. Both title
+parsers stripped `https?://…` and `www.…` but nothing else, so `youtu.be/dQw4w9WgXcQ` survived
+cleaning intact — **this is the "part of a URL" Mikhil saw in the field**. Both parsers now strip
+bare `host.tld/path` too, and `extractUrl()` normalises such links to https before resolving.
+The SSRF boundary is unchanged: `resolveUrlToText`'s host allowlist still decides what may
+actually be fetched, and the scheme-less host list is only about recognition.
+
+### 4. The search budget was spent on the least likely candidates (Worker)
+
+The one nobody reported, and the reason the field appeared so often. `windows()` emitted every
+word window strictly longest-first, which is backwards for a near-exact search engine — long
+windows almost never match. On `"Elden Ring Shadow of the Erdtree is brutal"`, `"Elden Ring"`
+ranked **10th of 23**, outside the 6-search budget, and the resolve settled for *"Ring Master I:
+The Shadow of Filias"* at 0.29. Windows are now ordered **whole run → shrinking prefixes →
+shrinking suffixes → interior**, with connectors trimmed off both ends of every window (no more
+`"Elden Ring Shadow of"` or `"of Legends"`).
+
+Measured against production, same caption, before and after:
+
+| | before | after |
+|---|---|---|
+| `"Elden Ring Shadow of the Erdtree is brutal"` | Ring Master I: The Shadow of Filias @ 0.29 | **Elden Ring @ 0.90** |
+| `"…Pocketpair Palworld"` (existing fixture) | Palworld @ 0.85 | Palworld @ 0.85 (no regression) |
+
+0.90 clears the 0.85 confidence threshold, so that share is now a **one-tap add** rather than a
+manual-entry dead end.
+
+### The new `suggestion` field
+
+`/resolve` now returns `suggestion` — the top-ranked candidate string — for the app to prefill
+with. It comes from the same ranking the searches used, so it is the cleanest fragment
+available, and because the title parser builds it, **it can never be a URL**. Null when there is
+nothing better than a bare link. The app prefers it, then the locally-cleaned resolved title,
+then its own local guess; every rung is URL-free by construction and the whole chain may be null.
+
+Old clients ignore the new field (`ignoreUnknownKeys = true`), and the accuracy fixes are
+server-side — so **testers on `versionCode 4` get better matching immediately**, without an
+update. Only the empty-field behaviour needs the new build.
+
+### Guarded by tests, not just by having been fixed
+
+`worker/test/shareLinks.test.ts` (7 new cases) plus two new cases in `TitleParserTest.kt`, all
+asserting the user-visible property directly: *nothing link-shaped may ever come out of the
+title parser*, and the real game name must rank inside the search budget. The Palworld and
+League fixtures from 2026-08-12 are re-asserted so the reordering can't regress them. Worker: 35
+tests pass. App: all unit tests pass.
+
+**One process note worth keeping.** The bare-host regex was written into the file through a
+Python heredoc and its `\b` became a literal backspace byte, so the pattern silently never
+matched — the tests caught it, and `cat -A` is what made it visible. Every source file was then
+scanned for stray control characters (none). Writing regexes through a shell heredoc is a bad
+idea in this repo; use the editing tools directly.
+
+---
+
+## 2026-08-19 (later) — the first tester report, and what it actually meant
+
+**The report:** DISCOVER "feels a bit empty" — TRENDING NOW and SHORT & SWEET aren't much — and
+the tester said they'd rather scroll vertically through a long library of games.
+
+**What was accepted, and what was declined.** The complaint is valid; the proposed fix isn't.
+An endless browsable catalogue was declined on three independent grounds, recorded here because
+it will be proposed again:
+
+1. It changes what the app is. CONTINUE? manages a backlog; IGDB is the catalogue. An infinite
+   library makes this a worse games database than the one it's already built on.
+2. It is the product's own thesis inverted. docs/02-PRODUCT-SPEC.md §3: "87 games, two free
+   hours, total paralysis, and you end up scrolling instead of playing." DRAW exists *because*
+   scrolling is the failure mode. Shipping an infinite scroll of games the user doesn't even own
+   builds the disease into the cure.
+3. It is expensive exactly where this stack is cheapest. Rails are fixed queries cached under one
+   KV key each; infinite scroll is paginated, unbounded and per-user, against the 1,000 KV
+   writes/day cap that docs/12-SECURITY.md calls the binding constraint.
+
+**The real finding was underneath it.** A tester spent enough time on DISCOVER to judge it thin,
+which means they never found the **share target** — the app's actual discovery mechanism and its
+headline feature. A grep confirmed why: the share flow was mentioned **nowhere in the app**. Not
+in onboarding (whose "SEED YOUR PILE" step offered a disabled Steam import and a search button),
+not in any empty state, nowhere. It was discoverable only by already knowing to look in the OS
+share sheet. That is a far more valuable bug than the one that was reported.
+
+### Fix 1 — five rails instead of two (Worker + app)
+
+docs/02-PRODUCT-SPEC.md §2c always specified five rails. Three were missing, so the tester was
+looking at a screen that was simply unfinished. Now shipping: TRENDING NOW · NEW RELEASES ·
+SHORT & SWEET · HIDDEN GEMS · a genre rail keyed to the user's own pile.
+
+New Worker routes `/games/new`, `/games/gems`, `/games/genre?name=` — **deployed and verified in
+production** (all four bindings listed on deploy; every rail returns 20 real games; an
+unresolvable genre returns 0 and writes nothing).
+
+Every query was probed against live IGDB *before* being written into the Worker, and two of the
+three obvious formulations turned out to be wrong:
+
+- **HIDDEN GEMS on `total_rating` is worthless.** `total_rating > 80 & total_rating_count > 5`
+  returns *Bubsy 3D* and *PokéOne* at 100/100 — a handful of user ratings is enough to float a
+  joke listing. Rebuilt on `aggregated_rating` (press coverage, which nothing brigades) with
+  `aggregated_rating_count >= 5`, and `total_rating_count < 200` is what makes it *hidden*
+  rather than merely good. Now returns The Witness, Metaphor: ReFantazio, Shadow Gambit.
+- **NEW RELEASES sorted by date is a rail of nobodies.** The newest thing in IGDB at any moment
+  is whatever indie was catalogued this morning. The same 180-day window ordered by rating count
+  gives the releases a backlog actually accumulates.
+- A third suspicion was wrong and worth recording: the notable-first list *looked* like it
+  contained unreleased games, and printing the real dates proved they were genuine 2026 releases.
+  Checking beat assuming in both directions.
+
+`game_status = null` (the "fully released" case) drops early-access entries. Note it is
+`game_status`, not the deprecated `status` — see the standing IGDB trap in the header comments of
+`IgdbGameProvider`.
+
+**The genre rail resolves names, never ids.** The app sends IGDB's genre *name* (which it already
+holds on its cached games); the Worker resolves it in memory against a cached copy of the whole
+genre table and caches results only under the resolved **id**. That ordering is the point: keying
+the cache on a client-supplied string would let anyone mint unlimited KV entries against the
+tightest quota in the stack. Unresolvable names cost one cheap lookup and write nothing.
+
+**`CACHE_VERSION` was deliberately not bumped.** The rails only add new keys and no existing query
+changed shape, so a bump would have cold-started every cache while the closed test was live, for
+nothing.
+
+App-side, the rails now load **one coroutine each and fill in as they land**, rather than the
+screen waiting on the slowest of five sequential round trips. They're declared up front in
+display order so nothing re-shuffles under the user's thumb, and a rail that returns empty simply
+doesn't render.
+
+### Fix 2 — the app now says the share target exists
+
+Three places, all copy:
+
+- **Onboarding's seed step** now names it as the best way to add a game.
+- **PILE's empty state** carries it as supporting text (`EmptyState` already had a `supporting`
+  slot, added the last time a tester asked what a screen was for).
+- **DISCOVER** leads with a card saying it out loud: *"Saw a game in a video? Hit share in TikTok,
+  YouTube or Reddit and pick CONTINUE?"* — on the exact screen where the misunderstanding
+  happened.
+
+### On briefing the testers
+
+Brief them on the **core loop**; don't mention the competition. Telling people it's a hackathon
+entry buys generous feedback instead of honest feedback, and the share loop is a feature nobody
+can find by exploring — leaving it unbriefed just burns a tester. Record the unbriefed result
+first, though: "a tester used the app without ever discovering the share target" is evidence
+available exactly once, and it is the whole justification for Fix 2.
+
+---
+
+## 2026-08-19 — closed testing started, and the STACK view
+
+### The clock is running
+
+Mikhil confirmed **closed testing has officially started** and Play Console reports the
+**12-tester requirement as met** (~14–16 invited; the opted-in figure is the one that counts and
+Play only surfaces it as met/not-met on the Dashboard's production-access card — the track's
+Testers tab shows *invited*, which is a different and always-larger number).
+
+Two live checks run this session, both green — worth doing at the start of any session now that
+real testers are hitting the app:
+
+- `https://mikhil-sec.github.io/GamesToPlay/privacy.html` → **HTTP 200**. GitHub Pages is on and
+  the policy URL in the listing resolves.
+- `https://continue-worker.gamestoplay.workers.dev/health?deep=1` → `{"ok":true,
+  "provider":"igdb","sampleCount":20}`. Real IGDB data, not the seed fallback.
+
+**What can still break the 14 days, in the order it's likely to happen:**
+
+1. **A tester uninstalls or leaves the group.** Dropping under 12 *resets* the counter, it
+   doesn't pause it. The headroom over 12 is the only defence.
+2. **Pausing/halting the track, or starting a second closed track.** Keep shipping into the one
+   that's counting.
+3. **A repeated `versionCode`.** The next upload must be **5 or higher** — `4` is spent. Pushing
+   a new build into the closed track is otherwise safe and does *not* reset the tester clock.
+
+**Both now confirmed (2026-08-19):** the clock started **2026-08-19**, and **`versionCode 4` is
+the build on the closed track**. So the earliest production-access application is **2026-09-02**,
+review is typically hours to a few days, and the Shipaton deadline is 2026-09-30 — roughly three
+weeks of slack. The next upload must be **`versionCode 5` / `versionName 0.5.0`** (Mikhil keeps
+the two in step deliberately).
+
+### STACK — the signature view, built
+
+`feature/pile/PileStackView.kt`. The pile as physical cases receding into the screen, flicked
+through with momentum and snapped to a card — docs/02-PRODUCT-SPEC.md §1 called it "the wow
+view" and it was the last named gap in PILE. `PileViewMode` is now `STACK, GRID, LIST`, **STACK
+is the default** (as the spec always said), and the mode is now genuinely **persisted** to
+DataStore, which the spec also asked for and which nothing had ever implemented.
+
+**Hand-rolled rather than built on `Pager`, deliberately.** A pager lays its pages out end to
+end; this view is *defined* by pages overlapping — every card is drawn in the same place and
+pushed apart purely by transform. Fighting a pager's layout to fake overlap is more code than
+owning the gesture, and owning it matches `DrawCardStack`'s existing idiom: an `Animatable`
+holding a fractional card index, a `VelocityTracker`, `rememberSplineBasedDecay` to project the
+fling target, then a spring to snap to the nearest whole card.
+
+Decisions worth not re-litigating later:
+
+- **Drag up advances**, matching scroll convention rather than the physical "pull a case toward
+  you" metaphor. The cost is that the receding stack and the departing card both travel *up* the
+  same strip of screen — paid for by making the departing card **scale up and fade out inside
+  the first ~45% of its travel**, so it reads as passing the camera instead of merging into the
+  pile behind it.
+- **Per-frame transforms live inside `graphicsLayer`**, read through a lambda, so they run in the
+  draw phase. Only the rounded card index is allowed to recompose (via `derivedStateOf`) — it
+  changes a handful of times per fling instead of sixty times a second.
+- **Covers use `IgdbImage.GRID`, not `HERO`.** The front card is ~600px wide on a 1080p phone and
+  IgdbImage's own measurements note IGDB *upscales* past the source (a typical cover's original
+  is only 600x800), so HERO would buy layout-correct pixels and no detail. Sharing the token with
+  the grid means one cache entry per game: switching views is instant, and promoting a card to
+  the front never re-fetches and flashes.
+- **The fling is capped at 8 cards.** Momentum is the point, but uncapped decay across an 87-game
+  pile lands somewhere nobody aimed for with nothing decoded yet.
+- **Titles are not printed on the cards.** Six stacked title strips is six competing labels, and
+  a game case doesn't caption itself. One caption sits below the pile and dims through each
+  hand-off, so it's never seen attached to the wrong cover.
+- **One detent haptic per card passed**, drag and fling alike — the decelerating burst at the end
+  of a flick is the reel-stopping feel the cabinet is for.
+- **STACK's header is a fixed block, not a list item.** GRID and LIST became one scrolling
+  surface on 2026-08-15; STACK can't join them because it owns a vertical drag gesture and the
+  two would fight for every drag. Instead the stack takes the leftover height via `weight(1f)`
+  and sizes its cards off `BoxWithConstraints`, so expanding the filters *shrinks the cards*
+  rather than pushing them off-screen — the 2026-08-15 lesson applied without the scroll.
+- The view toggle now **cycles** through three modes showing the icon of the mode you'd switch
+  *to*, using the enum's own order so the two can't drift.
+
+**Compiles clean and the unit tests pass. Nothing here has been seen on a device** — `adb
+devices` was empty again. Three values can only really be judged on glass, and all three are
+one-line changes at the top of `PileStackView.kt`:
+
+1. **`DEPTH_TILT_DEGREES` sign.** The cards tilt with `rotationX = -(4° × depth)`, intended as
+   the top edge leaning away. If the pile looks like it's leaning *toward* the viewer, flip the
+   sign — the magnitude is deliberately small (capped at 12°) so a wrong sign reads as slightly
+   odd rather than broken.
+2. **Drag direction.** If flicking up to advance feels backwards next to the DRAW cards, invert
+   the sign in `onVerticalDrag` and in the fling velocity together.
+3. **`DRAG_UNIT_FRACTION` (0.45 of card height).** How far you drag to move one card. Nothing but
+   a thumb can tell you if that's right.
 
 ---
 
@@ -912,7 +1690,7 @@ billing/ads repos in debug builds, same pattern as Phase 1.
 | Week | Scope | Status | Blocked on user? |
 |---|---|---|---|
 | 2 (remainder) | Stacks CRUD, filters | ✅ Built (§4b) | — |
-| 2 (remainder) | **STACK view** — the signature receding-3D-stack "wow" view | ❌ Still not built (GRID/LIST only) | No |
+| 2 (remainder) | **STACK view** — the signature receding-3D-stack "wow" view | ✅ **Built 2026-08-19** (`feature/pile/PileStackView.kt`), now the default view. Not yet seen on a device | — |
 | **3** | DRAW, Credits Roll, pairwise ranking | ✅ Built in full (§4b) | — |
 | 4 | Virtual currency spend, ad-watch-for-coin, GO PRO purchase attempt | ✅ Built (§4b) | — |
 | 4 | **Paywall UI** (`PaywallView`/RevenueCatUI), reusable `ProGate`, ad→Free-Play-Mode, Customer Center, Steam import review screen | ❌ Not built | Paywall UI itself can be built now against no products (it'll just show nothing purchasable); Customer Center same. Real products still need Play Console. |
@@ -940,22 +1718,24 @@ Nothing built or planned in the near term needs to wait for either.
 
 ## 8. Recommended next priority
 
-> **Superseded 2026-08-15 (later) — read this first.** Current order:
-> 0. **Publish the privacy policy** (push + GitHub Pages toggle, 5 min) and **take 4+ phone
->    screenshots of `versionCode 4`** (`tools/capture_screenshots.sh`). Those two are the only
->    remaining inputs to a complete store listing — every other field is pre-answered in
->    **`docs/13-STORE-LISTING.md`**.
-> 1. **Collect the 12+ tester emails and start the closed test.** This outranks every code item
->    below and always will until the clock is running — 14 consecutive days, per-app, and the
->    Shipaton deadline is 2026-09-30. Nothing in the build blocks it: `versionCode 4` is signed
->    and sitting in `app/build/outputs/bundle/release/`.
-> 2. **Install `versionCode 4` on a *phone*** and re-check PILE (scroll past the filters) and
->    DRAW (hide/show dials, pull the lever) — the four fixes from 2026-08-15 are layout changes
->    that have not been seen on glass. `./gradlew installDebug` is faster for iteration, and the
->    debug build shows a fully populated paywall via `FakeBillingRepository`.
+> **Superseded 2026-08-19 — read this first.** The closed test is running and the privacy
+> policy is live, so the two items that used to head this list are **done**. Current order:
+> 0. **Protect the clock.** Don't let the opted-in count fall under 12, don't pause or duplicate
+>    the track, and make the next upload `versionCode 5`+. Nothing else in this project matters
+>    as much for the next fortnight.
+> 1. **Get a phone on `adb`.** Three separate pieces of work are now stacked up behind "needs a
+>    device": the four 2026-08-15 layout fixes, RANK/Stacks/offline share matching, and the new
+>    STACK view's three feel-dependent constants. One session with a phone clears all of it.
+> 2. **Install a debug build on a *phone*** and re-check PILE (the new STACK view, then scroll
+>    past the filters in GRID) and DRAW (hide/show dials, pull the lever) — the four fixes from
+>    2026-08-15 are layout changes that have not been seen on glass. `./gradlew installDebug` is
+>    faster for iteration, and the debug build shows a fully populated paywall via
+>    `FakeBillingRepository`.
 > 3. Still never exercised on a device at all: **RANK, Stacks, and offline share matching** (try
 >    sharing a caption in airplane mode — a confident match should resolve with no network).
-> 4. Then, in value order: the STACK 3D view, the 4 remaining share cards, store assets.
+> 4. Then, in value order: the **CMP/UMP consent flow** (the one real policy gap — no consent
+>    flow means EEA/UK/CH ad traffic breaches Google's EU user consent policy), the 4 remaining
+>    share cards, Free Play Mode, Customer Center.
 >
 > **Closed, no longer needed:** pasting `TWITCH_CLIENT_SECRET` (done); designing a dashboard
 > paywall (hand-built, and now device-confirmed as the best-looking screen in the app).

@@ -58,8 +58,7 @@ class OfflineGameIndex @Inject constructor(
 
     /**
      * Mirrors `matchCandidates()` in `worker/src/resolve/resolveGame.ts`: try ranked candidate
-     * strings in order, score every hit against the **original** text (never the candidate that
-     * found it — that's what makes a one-word guess like "Palworld" safe), stop once a hit is
+     * strings in order, score every hit against the **original** text, stop once a hit is
      * confident enough. The only structural difference from the server version is that "search"
      * here is an exact dictionary lookup instead of an IGDB API call, because the whole
      * dictionary is on-device.
@@ -68,40 +67,86 @@ class OfflineGameIndex @Inject constructor(
         if (rawText.isNullOrBlank()) return emptyList()
         val index = indexDeferred.await()
         if (index.isEmpty()) return emptyList()
-
-        val scored = LinkedHashMap<Long, ResolveCandidateDto>()
-        var best = 0f
-
-        for (candidate in GameNameCandidates.rankedCandidates(rawText).take(MAX_CANDIDATES_TRIED)) {
-            val records = index[GameNameCandidates.normalize(candidate)] ?: continue
-            for (record in records) {
-                val confidence = GameNameCandidates.verifyAgainstText(rawText, record.name)
-                if (confidence <= 0f) continue
-                val existing = scored[record.id]
-                if (existing == null || existing.confidence < confidence) {
-                    scored[record.id] = ResolveCandidateDto(
-                        id = record.id,
-                        name = record.name,
-                        confidence = confidence,
-                        coverUrl = record.coverImageId?.let { IgdbImage.coverUrl(it) },
-                    )
-                }
-                if (confidence > best) best = confidence
-            }
-            if (best >= GameNameCandidates.CONFIDENT_ENOUGH) break
-        }
-        return scored.values.sortedByDescending { it.confidence }.take(5)
+        return matchIn(index, rawText)
     }
 
     companion object {
         private const val ASSET_NAME = "game_index.tsv.gz"
 
-        /** A local lookup is far cheaper than an IGDB request, but a pathological caption can
-         * still generate a long candidate list (see `GameNameCandidates.windows`) — capped so
-         * one share can't spend unbounded CPU on the main app process. */
-        private const val MAX_CANDIDATES_TRIED = 24
+        /**
+         * How many ranked candidate strings one share may look up.
+         *
+         * The Worker's equivalent budget is 6, because each of its attempts is an IGDB request
+         * against a 4-req/sec quota. Here each attempt is a hash lookup, so the budget only
+         * needs to stop a pathological caption from spending unbounded CPU on the main app
+         * process — and 24 was far tighter than that required.
+         *
+         * It was also actively losing matches. In an ALL-CAPS video title — "SIDEMEN AMONG US
+         * ULTIMATE DRAFT MODE: PICK EVERY ROLE IN THE GAME", reported 2026-08-23 — capitalisation
+         * carries no signal at all, so `properNounRuns` returns one twelve-word run and the
+         * budget goes entirely on its shrinking prefixes: `SIDEMEN AMONG US ULTIMATE DRAFT`,
+         * `SIDEMEN AMONG US`, `SIDEMEN`. `"Among Us"` ranked **27th** and was never tried.
+         * Raising the cap finds it, and measured across the captured-caption corpus that is the
+         * *only* answer that changes — the ranking already puts the good candidates first, so a
+         * longer tail costs a few dozen hash lookups and can only add matches that were
+         * previously unreachable.
+         */
+        private const val MAX_CANDIDATES_TRIED = 64
 
         private const val EXPECTED_COLUMNS = 8
+
+        /**
+         * The scoring loop, pure and separate from asset loading so `OfflineGameIndexTest` can
+         * run it against the **real shipped index** from a plain JVM test.
+         *
+         * Each hit is scored twice and the better score wins: once against the record's
+         * canonical name, and once against **the key that found it**.
+         *
+         * That second half is the fix for a flaw that had made the entire `alternative_names`
+         * half of this index dead weight. Verification asks whether a name appears whole-word
+         * in the caption, and an alternative name never shares its spelling with the canonical
+         * one — that's what makes it an alternative. So "BG3" found `Baldur's Gate III`,
+         * scored it against a caption containing no such string, got 0, and threw the record
+         * away; likewise "Resident Evil 9 Requiem" (a real IGDB alternative name for
+         * *Resident Evil Requiem*, id 347668) against a caption that never spells out the
+         * canonical title. Abbreviations and regional titles were exactly what shipping a
+         * 610 KB dump index was *for*, and none of them could ever win.
+         *
+         * Scoring the key is safe precisely because it is not a free-text guess: it is a string
+         * derived from the user's own caption that turned out to be an exact IGDB name for this
+         * game. Both halves still verify against the original caption, so a one-word guess like
+         * "Palworld" is still only allowed to win because "Palworld" is really in the text.
+         */
+        internal fun matchIn(
+            index: Map<String, List<OfflineGameRecord>>,
+            rawText: String,
+        ): List<ResolveCandidateDto> {
+            val scored = LinkedHashMap<Long, ResolveCandidateDto>()
+            var best = 0f
+
+            for (candidate in GameNameCandidates.rankedCandidates(rawText).take(MAX_CANDIDATES_TRIED)) {
+                val records = index[GameNameCandidates.normalize(candidate)] ?: continue
+                for (record in records) {
+                    val confidence = maxOf(
+                        GameNameCandidates.verifyAgainstText(rawText, record.name),
+                        GameNameCandidates.verifyAgainstText(rawText, candidate),
+                    )
+                    if (confidence <= 0f) continue
+                    val existing = scored[record.id]
+                    if (existing == null || existing.confidence < confidence) {
+                        scored[record.id] = ResolveCandidateDto(
+                            id = record.id,
+                            name = record.name,
+                            confidence = confidence,
+                            coverUrl = record.coverImageId?.let { IgdbImage.coverUrl(it) },
+                        )
+                    }
+                    if (confidence > best) best = confidence
+                }
+                if (best >= GameNameCandidates.CONFIDENT_ENOUGH) break
+            }
+            return scored.values.sortedByDescending { it.confidence }.take(5)
+        }
 
         /**
          * Pure parse, factored out so it can be exercised directly against the real shipped

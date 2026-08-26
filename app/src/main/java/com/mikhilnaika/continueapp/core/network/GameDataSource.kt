@@ -14,6 +14,11 @@ interface GameDataSource {
     suspend fun search(query: String): List<GameDto>
     suspend fun trending(): List<GameDto>
     suspend fun shortAndSweet(): List<GameDto>
+    suspend fun newReleases(): List<GameDto>
+    suspend fun hiddenGems(): List<GameDto>
+
+    /** [genreName] must be IGDB's own genre name, e.g. "Role-playing (RPG)". */
+    suspend fun byGenre(genreName: String): List<GameDto>
     suspend fun resolve(text: String?, subject: String?): ResolveResponse
 
     /** One game by IGDB id. Null when unreachable or unknown — never throws. */

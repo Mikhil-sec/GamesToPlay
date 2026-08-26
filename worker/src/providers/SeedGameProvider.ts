@@ -1,4 +1,4 @@
-import type { GameDto, GameProvider } from "../types.ts";
+import type { GameDto, GameProvider, GenreRef } from "../types.ts";
 // Reuses the exact same offline seed set the Android app bundles (tools/generate_seed.mjs
 // at the repo root) — one source of truth instead of two copies drifting apart.
 import seedGamesRaw from "../../../app/src/main/assets/seed_games.json";
@@ -73,6 +73,46 @@ export class SeedGameProvider implements GameProvider {
       .slice(0, 20)
       .map(toDto);
   }
+
+  /** Newest first by release date — the seed set carries `released` as an ISO date string. */
+  async newReleases(): Promise<GameDto[]> {
+    return seedGames
+      .filter((g) => g.released !== null)
+      .sort((a, b) => (b.released ?? "").localeCompare(a.released ?? ""))
+      .slice(0, 20)
+      .map(toDto);
+  }
+
+  /** Well-rated but not famous — the seed set's only popularity signal is `metacritic`. */
+  async hiddenGems(): Promise<GameDto[]> {
+    return seedGames
+      .filter((g) => (g.metacritic ?? 0) >= 80)
+      .sort((a, b) => (b.metacritic ?? 0) - (a.metacritic ?? 0))
+      .slice(0, 20)
+      .map(toDto);
+  }
+
+  /**
+   * Synthetic ids, assigned by position in the sorted distinct-name list. They only have to be
+   * stable within one deploy, because [byGenre] is the sole consumer and the route always
+   * resolves a name through [genres] first — no id is ever persisted or sent by a client.
+   */
+  async genres(): Promise<GenreRef[]> {
+    return seedGenreNames().map((name, index) => ({ id: index + 1, name }));
+  }
+
+  async byGenre(genreId: number): Promise<GameDto[]> {
+    const name = seedGenreNames()[genreId - 1];
+    if (!name) return [];
+    return seedGames
+      .filter((g) => g.genres.includes(name))
+      .slice(0, 20)
+      .map(toDto);
+  }
+}
+
+function seedGenreNames(): string[] {
+  return [...new Set(seedGames.flatMap((g) => g.genres))].sort();
 }
 
 function sample<T>(items: T[], count: number): T[] {

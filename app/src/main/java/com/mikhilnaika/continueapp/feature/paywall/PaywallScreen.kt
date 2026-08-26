@@ -361,11 +361,19 @@ private fun OutOfOrder() {
     }
 }
 
+/**
+ * The CTA says what the tap actually does, in the cabinet's voice.
+ *
+ * The lifetime tier read "INSERT COIN" next to the monthly tier's "SUBSCRIBE", which a closed
+ * tester read as the rewarded-ad button rather than a purchase — "INSERT COIN" is the app's
+ * label for *earning* a coin by watching an ad (DRAW's gate, `DrawGateScreen`), so reusing it
+ * for a one-off payment was actively misleading, not just inconsistent.
+ */
 private fun ProTier?.ctaLabel(purchasing: Boolean): String = when {
     purchasing -> "…"
     this == null -> "INSERT COIN"
     freeTrialDays != null -> "START $freeTrialDays FREE DAYS ▸"
-    isLifetime -> "INSERT COIN ▸"
+    isLifetime -> "PURCHASE ▸"
     else -> "SUBSCRIBE ▸"
 }
 

@@ -1,6 +1,7 @@
 package com.mikhilnaika.continueapp.core.util
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -11,6 +12,39 @@ import org.junit.Test
  * directly visible to judges" — hence the heavy coverage here rather than a couple of cases.
  */
 class TitleParserTest {
+
+    /**
+     * From the first closed-test report (2026-08-19): YouTube and Instagram shares were putting
+     * the raw link into the manual-entry field, so the user had to clear it before typing.
+     * Whatever survives here is what gets offered, so nothing link-shaped may come out.
+     */
+    @Test
+    fun `a share that is only a link yields no candidate to prefill`() {
+        val linkOnlyShares = listOf(
+            "https://www.instagram.com/reel/C8xYzAbCdEf/?igsh=abc123",
+            "https://youtu.be/dQw4w9WgXcQ",
+            "youtu.be/dQw4w9WgXcQ",
+            "instagram.com/reel/C8xYzAbCdEf/",
+            "www.youtube.com/watch?v=dQw4w9WgXcQ",
+        )
+        for (share in linkOnlyShares) {
+            assertEquals(
+                "a link-only share must offer nothing rather than the link: $share",
+                emptyList<String>(),
+                TitleParser.extractCandidates(share),
+            )
+        }
+    }
+
+    @Test
+    fun `a caption around a link keeps the caption and drops the link`() {
+        val candidates = TitleParser.extractCandidates("Elden Ring boss fight youtu.be/dQw4w9WgXcQ")
+        assertTrue("expected the caption to survive, got $candidates", candidates.isNotEmpty())
+        for (candidate in candidates) {
+            assertFalse("link fragment leaked: $candidate", candidate.contains("youtu.be"))
+            assertFalse("link fragment leaked: $candidate", candidate.contains("/"))
+        }
+    }
 
     @Test
     fun `blank or null input returns no candidates`() {

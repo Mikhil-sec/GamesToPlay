@@ -99,6 +99,18 @@ interface PileDao {
     @Query("SELECT * FROM pile_entries WHERE gameId = :gameId LIMIT 1")
     suspend fun findByGameId(gameId: Long): PileEntryEntity?
 
+    /**
+     * Ids of every game in the pile, whatever state it's in — what DISCOVER marks as already
+     * added.
+     *
+     * Deliberately *not* the join in [observeAll]: this has to answer "is this game in the
+     * pile?", and an entry whose cached `games` row went missing is still in the pile even
+     * though the join would drop it. Using the join here would let DISCOVER offer to re-add a
+     * game the user already has.
+     */
+    @Query("SELECT gameId FROM pile_entries")
+    fun observeAllGameIds(): Flow<List<Long>>
+
     @Query("SELECT * FROM pile_entries WHERE entryId = :entryId LIMIT 1")
     suspend fun getById(entryId: Long): PileEntryEntity?
 
@@ -110,6 +122,16 @@ interface PileDao {
 
     @Delete
     suspend fun delete(entry: PileEntryEntity)
+
+    /**
+     * Take a game out of the pile entirely — the undo for an accidental add.
+     *
+     * Deliberately not the same thing as RETIRED, which is a *state* meaning "I've decided to
+     * let this one go" and is counted as such by PROFILE's trophies. A game added by mistake was
+     * never in the pile in any meaningful sense, and had no way out before this.
+     */
+    @Query("DELETE FROM pile_entries WHERE entryId = :entryId")
+    suspend fun deleteById(entryId: Long)
 
     /** docs/02-PRODUCT-SPEC.md §3 — the DRAW candidate pool is the BACKLOG. */
     @Query(
