@@ -5,7 +5,31 @@
 > what's next. Update it whenever you finish a chunk of work or discover something that
 > changes this picture — don't let it go stale like a comment nobody re-reads.
 >
-> Last updated: 2026-08-26 — **the third closed-test feedback round**, and the first one to
+> Last updated: 2026-08-28 — **the fourth closed-test feedback round, and the biggest one**:
+> ten tester items plus one of Mikhil's own, all eleven addressed. Headlines: the **HAPTICS
+> setting had never been wired to anything** (five screens each built their own `Haptics`); the
+> **clear-a-game coin reward was an unbounded faucet** (clear → back to THE PILE → clear again);
+> **filters were rebuilt on one shared vocabulary** (`GameTaxonomy`) now used by PILE, DRAW's new
+> GENRE dial and a new **STATS** screen; **backdating** landed, so games cleared before the app
+> existed can be logged with real dates; search learned to **respell** a query with its
+> separators missing (`spiderman` → `spider man`), to **re-rank** IGDB's answer and to **dedupe**
+> it; DISCOVER search rows gained **cover art, year and length**; rails gained **SHOW MORE**; and
+> RANK gained **manual reordering and removal**. "Ghost of Tsushima has no banner" root-caused to
+> the **share target writing a deliberately incomplete `games` row** — fixed, plus a
+> once-per-launch batch refresh that repairs every already-cached row on every device. The Worker
+> was redeployed (game modes in `tags`, `/games/batch`, rail paging, `CACHE_VERSION` v5) and
+> verified against production. **131 unit tests, 0 failures** (was 84). See the 2026-08-28 entry
+> immediately below.
+>
+> Same day, second pass: **the two remaining dead controls and the Room migration lane**. The
+> CLIPBOARD DETECTION switch and the hours-per-week input were the same bug as HAPTICS — controls
+> a user can touch that were wired to nothing — and `AppDatabase` was one entity change away from
+> crashing every existing install on launch. All three fixed; **150 unit tests, 0 failures**.
+>
+> ⚠️ **Nothing in this round has been on a device.** `adb devices` was empty for the whole
+> session, so every item below is "compiles, tested where testable, unverified on glass".
+>
+> Previous entry: 2026-08-26 — **the third closed-test feedback round**, and the first one to
 > contain a *crash*. Four items: the STACK crash reported by three testers and carried in two
 > Play Console issues (**root-caused and fixed** — one missing `remember` key), no way to undo an
 > accidental add (**REMOVE FROM PILE added**), the paywall's lifetime CTA reading "INSERT COIN"
@@ -55,6 +79,318 @@
 > RevenueCat, which shows real customer records tagged `0.2.0` and `0.3.0`. Only *Closed*
 > testing has stayed on `versionCode 4` throughout; Internal testing has been iterated on the
 > whole time. "Never uploaded" below refers only to the Closed track.
+
+---
+
+## 2026-08-28 — fourth closed-test feedback round: eleven items
+
+Ten from testers, one from Mikhil. All eleven are in code; **none has been on a device** (see the
+warning at the top).
+
+### 1. Haptics didn't turn off ✅
+
+Reported against both the STACK flick and the DRAW lever, and true of every haptic in the app.
+`UserPreferencesRepository` stored the switch, `ProfileScreen` drew it, `Haptics` carried a
+comment saying "global on/off is a settings toggle at the call site" — and **not one of the five
+call sites checked it**. Every screen did `remember { Haptics(context) }`, so each had its own
+engine and none had ever seen the preference.
+
+`Haptics` is now an injected `@Singleton` that collects `isHapticsEnabled` into a `@Volatile`
+mirror and short-circuits every effect itself, reached through a `LocalHaptics` composition
+local provided in `MainActivity`. The toggle is unfalsifiable now: there is no way to fire an
+effect that skips the check, because there is no other way to obtain a `Haptics`.
+
+**Worth generalising:** a setting enforced "at the call site" is a setting enforced nowhere. Put
+the check inside the thing being switched off.
+
+### 2. The clear-a-game coin reward could be farmed ✅
+
+Clear a game (+5), move it back to THE PILE, clear it again. Forever. The existing guard
+(`if (entry.state != PileState.COMPLETED)`) only ever stopped the *same* Credits Roll paying
+twice, which was never the problem.
+
+The reward is a property of the **game**, not of the transition, so it's now claimed against
+`clear:<gameId>` in a new `CoinLedger.earnOnce` — check and write in one `edit` transaction, so a
+double-tap can't get through either. A genuine replay still gets the whole cinematic; it just
+reads `ALREADY PAID FOR THIS ONE` rather than promising coins the balance won't show, because
+the Credits Roll now prints `state.coinsAwarded` instead of a hardcoded "+5 COINS".
+
+### 3. Backdating — logging games cleared before the app existed ✅
+
+Two entry points, one dialog (`core/ui/GameDatesDialog.kt`):
+
+- **DISCOVER → long-press a result → ALREADY CLEARED** → pick started/cleared dates → the game
+  goes straight into CLEARED. `addedAt` is backdated too, so "time in the pile" and the RECENT
+  sort read as history rather than as something added today.
+- **PILE → a game → EDIT DATES** → for one already in the pile.
+
+Future dates are blocked *in the picker* rather than validated after; a cleared date before a
+started date disables SAVE with the reason spelled out.
+
+One real trap handled in `CalendarDates`: Material's `DatePickerState.selectedDateMillis` is
+**UTC midnight** of the picked day, while every timestamp in `pile_entries` is a local instant
+formatted in the device's zone. Feeding one straight into the other is an off-by-one-day bug that
+only appears for users in the wrong half of the world. A picked day becomes **local noon**, which
+no zone or DST transition can round onto a neighbouring date.
+
+**Backdated clears pay no coins and burn the reward key** — see item 2. Logging a hundred old
+games in a minute would have been a faster faucet than the loop just closed.
+
+### 4. Filters overhauled, and DRAW now uses the same ones ✅
+
+Reported as "filters not overhauled — better filters, like having genres (horror, thriller, fps,
+multiplayer); not consistent across categories and the draw button". Three separate bugs under
+one complaint:
+
+1. **The vocabulary was IGDB's raw genre strings**, which contain no "horror" (that's a *theme*),
+   no "FPS" (that's "Shooter") and no "multiplayer" at all — because the Worker was **dropping
+   `game_modes` on the floor** (item 8). New `core/util/GameTaxonomy.kt` defines 22 facets matched
+   across genres, themes **and** game modes at once, and PILE's chips, **DRAW's new GENRE dial**
+   and the new STATS screen all read the same function. That is what "consistent across
+   categories and the draw button" actually required.
+2. **The chip set was built from the current tab**, so it changed every time you switched tab.
+   It's now built from the whole pile and is therefore stable; the *counts* on each chip describe
+   the tab you're looking at.
+3. **A chip matching nothing vanished**, taking with it the only control that could turn off a
+   filter that was silently emptying the tab. Zero-count chips now render disabled with a `0` —
+   and stay tappable if they're the one that's on.
+
+Also: multi-select with **OR inside a group, AND between groups**, a CLEAR FILTERS button, and
+`PileSort`'s chip row generated from the enum — which surfaced that **`RATING` was implemented as
+the identity function** ("rating not denormalized onto PileEntryWithGame yet") and
+**`RELEASE_DATE` sorted by date *added***. Both columns were already on `games`; the projection
+just never selected them. Fixed, and both are now offered.
+
+DRAW's relaxation ladder is now platform → genre → **time last**, because time is the machine's
+premise: a draw that quietly ignores "30 minutes" hands you a 60-hour RPG, which is the one
+failure the user can't work around.
+
+### 5. STATS ✅
+
+New screen, reached from PILE's header (`feature/stats/`). Scope selector (EVERYTHING or any one
+state) over: THE SPREAD (every state as one proportional bar), GAMES/HOURS/SPAN tiles, a
+**DIVERSITY 0–100** meter, and bars for genre & mood, length, platform and release decade.
+
+Diversity is **normalised Shannon entropy over the facet mix**, not a category count —
+19 shooters and 1 puzzle game is not a varied pile, and a count says it is. Pinned by
+`PileStatsTest`.
+
+Drawn entirely with layout (`Box` width fractions, a `Row` of weights) rather than a chart
+library: no new dependency in a public repo, and it reads to TalkBack as ordinary text.
+
+### 6. "Ghost of Tsushima has no banner" — the share target was writing a stub ✅
+
+Not an IGDB gap. `/games/75235` returns full 1920x1080 key art, three genres, five themes, two
+platforms and real playtimes — verified against production this session. The app had never asked.
+
+`ShareTargetViewModel.addCandidate` built a `GameEntity` inline from a resolve candidate, which
+carries only id/name/cover, and wrote `null` for the background, the release date and all three
+playtimes plus empty arrays for genres, themes and platforms — **as an unconditional REPLACE**,
+so sharing in a game you already had *downgraded* a complete row to the stub. That single line is
+also why a shared-in game showed "ENDLESS" for its length and matched no filter anywhere.
+
+New `core/data/GameCacheRepository.kt` owns every write to `games`:
+
+- `cacheMinimal` never overwrites an existing row, and stamps the stub `cachedAt = 0` so it is
+  first in line for the next refresh. It does **no** network work — the share sheet says "added"
+  the moment it returns, and a detail fetch there would put a round trip between the tap and the
+  confirmation. `hydrateInBackground` is the non-blocking half, on a process-scoped coroutine
+  because the share Activity finishes and takes `viewModelScope` with it.
+- `refreshStaleGamesOnce()` runs once per launch and repairs up to **50 games in one request**
+  via the new `/games/batch`. Rows cached before `CACHE_EPOCH_MILLIS` are refreshed on sight —
+  the client-side twin of the Worker's `CACHE_VERSION`, because a shape change that only affects
+  *new* rows leaves every existing user on the old shape forever.
+
+### 7. Search: "spiderman vs spider-man" ✅
+
+`search "spiderman"` returns **4** results led by *Questprobe featuring Spider-Man* (1984);
+`search "spider-man"` returns **20** led by the ones anybody means. `streetfighter` returns
+**zero**. IGDB tokenises on punctuation, so a query with its separators left out is one unknown
+token.
+
+Two fixes:
+
+- **Respelling** (`OfflineGameIndex.respell`). The dictionary that fixes this was already on the
+  device: the offline index is keyed by *normalized* name — spaces kept, punctuation gone — so
+  `Spider-Man` is stored as `spider man`, and squashing that key's spaces out gives back exactly
+  what the user typed. No word list and no heuristic segmentation; the only respellings it can
+  produce are real IGDB titles. Fires only for a single-token query of 6+ characters, and the
+  respelled search is run *alongside* the original, never instead of it, with a note on screen.
+- **Re-ranking** (`core/util/SearchRanking.kt`). Coarse tiers (exact / prefix / word-boundary /
+  contains) with a tiebreak on how much of the title the query covers, and stable sorting so
+  IGDB's own order survives inside a tier.
+
+### 8. "Blasphemous appears 2 times, and each can be added twice" ✅
+
+Two different things, so two fixes. `SearchRanking.dedupe` removes real duplicates — the same id
+twice (which would also *throw* in a keyed `LazyColumn`, and is guaranteed once two queries are
+merged) and the same squashed name released the same year. And search rows now show the **release
+year**, because IGDB carries four genuinely different games called *Spider-Man* and merging those
+would be the worse bug; without a date they were four identical rows and the app looked broken.
+
+### 9. Covers in search results ✅
+
+Asked for directly. Each row now carries 40dp box art, and a `year · length · platform` metadata
+line — the same initial-underneath trick `GameCard` uses, so a row whose art hasn't arrived still
+reads as a game rather than an empty slab.
+
+### 10. DISCOVER SHOW MORE ✅ (it doesn't strain the API)
+
+The tester's caveat was "if it would strain the api, drop the idea". It doesn't, and that's a
+property of the design rather than luck: **a rail's contents don't depend on who is asking**, so
+page 2 of TRENDING is one KV entry shared by every user, not one per user. Three pages (60 games)
+per rail, clamped in `security.ts`, after which the button removes itself. Search paging was
+deliberately *not* added — that key **would** be per-user.
+
+### 11. (Mikhil's) Rankings can be edited ✅
+
+YOU → HIGH SCORES → **EDIT** turns on per-row up/down/drop. Up-and-down buttons rather than
+drag-to-reorder: a drag handle inside a scrolling `LazyColumn` fights the scroll on a phone, and
+a leaderboard gets corrected by a slot or two, not rearranged wholesale.
+
+The subtle part is buckets. `PairwiseRanker` binary-searches *within* a bucket and assumes each
+bucket is one contiguous run of positions, so a game dragged past a boundary **adopts the bucket
+it lands in** — otherwise every later automatic placement would be quietly wrong. Positions are
+renumbered densely in one transaction rather than swapped, because they genuinely arrive with
+gaps (`deleteByGameId` leaves one, `shiftDown` only pushes downward), so "swap the two numbers"
+would be right only by luck.
+
+Dropping a game from the leaderboard **leaves it in CLEARED** — it is not REMOVE FROM PILE, and
+the confirmation says so, because the app already has a destructive action that this could be
+mistaken for.
+
+### 12. The two remaining dead controls, and the migration landmine
+
+Found by auditing for the *shape* of the haptics bug rather than by a report. All three are
+things that looked implemented from every angle except the one that counts.
+
+**CLIPBOARD DETECTION was a switch wired to nothing.** `UserPreferencesRepository` stored it and
+`ProfileScreen` drew it; **no other file in the app read it**, and there was no `ClipboardManager`
+anywhere. Now built (docs/02-PRODUCT-SPEC.md §2d): on every foreground, if the setting is on, the
+clipboard text is checked against the IGDB name index **already in the APK** — offline, no Worker
+call — and a confident hit becomes a dismissible banner.
+
+The gate is deliberately mean, because this is the one surface that interrupts unprompted:
+`isPlausibleGameName` rejects links (those belong to the share target, which resolves them
+properly), emails and handles, one-time codes and phone numbers, multi-line text, anything over
+60 characters or 8 words, and anything with no letters in it. Then it needs an offline match at
+`CONFIDENT_ENOUGH` — the same bar the share target uses to skip its chooser entirely. A game
+already in the pile is silently swallowed rather than offered. `ClipboardNudgeTest` pins every
+rejection.
+
+Two details that aren't obvious:
+- **Off by default, and that's not just a preference.** From Android 12 the system toasts
+  *"CONTINUE? pasted from your clipboard"* whenever an app reads clipboard content it didn't
+  write. Reading unprompted would put that toast on every single app open. Behind an off-by-
+  default switch, only people who asked for the feature ever see it — and the toggle's new
+  description says so, in as many words, rather than letting the toast be the user's first hint.
+- **A dismissal is persisted**, not held in memory, so "no" survives a relaunch. Re-asking on
+  every foreground is exactly the "irritation when it's wrong" the spec warns about.
+
+**Hours-per-week was a knob with no handle.** `PileViewModel.setHoursPerWeek` existed and had
+**no callers**, so "FINISHED BY 2029" — the headline of the app's signature bar — was computed
+from a hardcoded 6 h/week for everybody. `TimeBudgetBar` had carried an unused `onExpand` hook
+since it was written, so its chevron had never even rendered. It now opens a slider, the value is
+persisted, and the projection updates **as you drag** through the same `finishByCopy` the bar
+itself calls — one copy of the arithmetic, not two.
+
+Extracting that function immediately surfaced a real bug it had been hiding: months were passed
+to `Calendar.add` as an `Int`, and a large enough pile at one hour a week **overflows and wraps
+the date backwards**, printing a finish year that has already happened for the most hopeless pile
+in the app. Now capped with an explicit "FINISHED BY NEVER". `FinishByCopyTest` covers it.
+
+**Room had no migration path and no fallback.** `AppDatabase` was `version = 1` built with a bare
+`.build()`. Room stores a version in every device's database file; open one whose stored version
+is older than the code expects with no `Migration` covering the gap and it throws
+`IllegalStateException` — **on launch, for every user who upgrades**. The reason that ships so
+easily is that a *fresh install* works perfectly: only an upgrade, which is what every tester gets
+from Play, hits it. This release routed around the landmine deliberately (every change went into
+DAO projections and queries, never the schema), but the next added column would have found it.
+
+Now: `DatabaseSchema.VERSION` is the single declaration, `AppMigrations.ALL` is the (currently
+empty) chain, `DataModule` calls `.addMigrations(...)`, and **`AppMigrationsTest` fails the build**
+if the version moves without a migration to service it, or if an old schema JSON is deleted. The
+guard was verified by temporarily bumping the version to 2 and confirming the suite goes red —
+a test that has never failed is a test you don't know works.
+
+`fallbackToDestructiveMigration()` is banned in writing in `DatabaseSchema`. It makes the crash
+go away by deleting the database — that is, by erasing the user's entire pile, every clear date
+and every ranking, which is the one thing in this app that can't be re-fetched.
+
+One thing the first cut of the clipboard nudge got wrong, caught before it shipped: the read was
+gated in the **ViewModel**, which meant the clipboard was already read by the time anything
+checked the setting — and on Android 12+ the system paste toast fires on the *read*. Every user
+would have seen "CONTINUE? pasted from your clipboard" on every app open regardless of the
+switch. The gate now sits in the composable (`DisposableEffect` keyed on the setting, so with it
+off no observer is even registered) with the ViewModel check kept as defence in depth. **A
+privacy gate has to sit at the point of access, not at the point of use** — the same lesson as
+the haptics bug, one layer further out.
+
+**Left alone on purpose:** `loadFreePlayAd()` is implemented against a real ad unit and called by
+nothing. That's dead *code* awaiting a feature, not a dead *control* — no user can touch it and
+be lied to — and the real AdMob units can't fill until the app is live on Play anyway, so FREE
+PLAY mode is correctly a post-launch item.
+
+### Worker changes (deployed and verified against production)
+
+- `toDto` folds **`game_modes` into `tags`** alongside themes. It had been requested from IGDB in
+  `GAME_FIELDS` since day one and then discarded — which is why nothing could tell a multiplayer
+  game from a single-player one, and why `MoodMapper`'s CHAOS rule (which looks for "multiplayer"
+  in exactly that list) had never once matched.
+- **`/games/batch?ids=`** — up to 50 games in one request, **uncached on purpose**: the id set is
+  user-shaped, so a cache key would burn the 1,000 writes/day budget. Ids are parsed to `Number`
+  before the query is built; malformed ones are dropped rather than failing the request.
+- **`?page=0..2`** on every rail, clamped in `security.ts` (`sanitizePage`) — an uncapped page is
+  an unbounded-KV-key hole.
+- `CACHE_VERSION` **v4 → v5**, because `tags` changed shape.
+
+Verified live, not just deployed: `/games/75235` now returns `"Single player"` in `tags`,
+`/games/batch?ids=75235,26820,1020,abc,-5` returns exactly the three real games with full
+metadata, and `trending?page=9` clamps to page 2 rather than erroring or paging forever.
+
+### Verified
+
+- `worker`: `npm test` — **50 tests, 0 failures** (5 new, covering page/id sanitisation).
+- `app`: `./gradlew testDebugUnitTest` — **150 tests, 0 failures** (was 84). New:
+  `GameTaxonomyTest`, `SearchRankingTest`, `PileFilteringTest`, `PileStatsTest`,
+  `ClipboardNudgeTest`, `FinishByCopyTest`, `AppMigrationsTest`, plus respell cases in
+  `OfflineGameIndexTest` (run against the **real shipped index**) and reorder cases in
+  `PairwiseRankerTest`.
+- `./gradlew bundleRelease` — **`versionCode 8` / `0.8.0` built and signed** at
+  `app/build/outputs/bundle/release/app-release.aab` (32.8 MB, `jarsigner -verify` clean, signer
+  cert valid to 2056). `versionName` read back **out of the bundle's own manifest**, not trusted
+  from the Gradle file. Supersedes `versionCode 7`, which was built 2026-08-26 and never uploaded
+  anywhere; the Closed track is still on `versionCode 6`.
+
+### NOT verified — read this before assuming anything works
+
+**`adb devices` was empty for this entire session, so nothing below has been seen on a screen.**
+The highest-risk items, in the order worth tapping through:
+
+1. **STATS** — a brand-new screen. Never rendered.
+2. **`GameDatesDialog`** — the first use of Material 3's `DatePicker` anywhere in the app;
+   its colours are themed by hand and have never been looked at.
+3. **PILE's filter section** — three chip groups where there was one row. On a phone this is the
+   exact shape of the 2026-08-14 and 2026-08-15 layout breaks, both of which a tablet hid.
+4. **DRAW's new GENRE dial** — one more `DialSection` in a region that already scrolls, on a
+   screen whose lever must never be compressed.
+5. **HIGH SCORES edit mode** — three icon buttons appended to a row that already holds a rank, a
+   cover and two lines of text.
+6. **Haptics actually going quiet** with the toggle off — the whole point of item 1, and only a
+   thumb can confirm it.
+7. **The clipboard nudge** — turn CLIPBOARD DETECTION on, copy `Hollow Knight Silksong`, background
+   and reopen the app. Check the banner appears, that ADD works, that dismissing it stops it
+   coming back, and what Android's paste toast actually looks like on the test device.
+8. **The hours-per-week slider** — a Material 3 `Slider` inside an `AlertDialog`, hand-themed.
+
+One layout risk was caught by arithmetic rather than by a screen, and is worth recording because
+it is the *third* instance of the same shape: STATS was first put in PILE's header as a fourth
+icon button, which on a 360dp phone is ~350dp of non-weighted children inside ~328dp of usable
+width. `Row` measures non-weighted children first and hands the leftovers whatever is left, so
+the last button would have been squeezed — exactly the 2026-08-14 tabs break and the 2026-08-15
+DRAW-button break, both of which a tablet absorbed. STATS is reached from the filter panel and
+from **YOU → SEE THE FULL BREAKDOWN** instead, and the header row is byte-for-byte as wide as the
+one testers have already used. **Count the widths before adding anything to a shared chrome row.**
 
 ---
 

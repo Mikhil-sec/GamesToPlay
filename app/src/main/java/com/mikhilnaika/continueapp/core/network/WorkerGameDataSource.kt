@@ -31,29 +31,35 @@ class WorkerGameDataSource @Inject constructor(
         fromSeed = { fallbackSearch(query) },
     )
 
-    override suspend fun trending(): List<GameDto> = fromWorkerOrSeed(
-        fromWorker = { api.trending().results },
-        fromSeed = { fallbackRandom() },
+    // Rails past page 0 deliberately have **no** seed fallback: the seed set is 426 games, so
+    // "there is no page 2" is the truth, and inventing one by re-showing page 1 would make
+    // SHOW MORE feel broken rather than finished.
+    override suspend fun trending(page: Int): List<GameDto> = fromWorkerOrSeed(
+        fromWorker = { api.trending(page).results },
+        fromSeed = { if (page > 0) emptyList() else fallbackRandom() },
     )
 
-    override suspend fun shortAndSweet(): List<GameDto> = fromWorkerOrSeed(
-        fromWorker = { api.shortAndSweet().results },
-        fromSeed = { fallbackRandom().filter { (it.playtimeHoursNormally ?: Int.MAX_VALUE) < 8 } },
+    override suspend fun shortAndSweet(page: Int): List<GameDto> = fromWorkerOrSeed(
+        fromWorker = { api.shortAndSweet(page).results },
+        fromSeed = {
+            if (page > 0) emptyList()
+            else fallbackRandom().filter { (it.playtimeHoursNormally ?: Int.MAX_VALUE) < 8 }
+        },
     )
 
-    override suspend fun newReleases(): List<GameDto> = fromWorkerOrSeed(
-        fromWorker = { api.newReleases().results },
-        fromSeed = { fallbackRandom().sortedByDescending { it.released.orEmpty() } },
+    override suspend fun newReleases(page: Int): List<GameDto> = fromWorkerOrSeed(
+        fromWorker = { api.newReleases(page).results },
+        fromSeed = { if (page > 0) emptyList() else fallbackRandom().sortedByDescending { it.released.orEmpty() } },
     )
 
-    override suspend fun hiddenGems(): List<GameDto> = fromWorkerOrSeed(
-        fromWorker = { api.hiddenGems().results },
-        fromSeed = { fallbackRandom().filter { (it.metacritic ?: 0) >= 80 } },
+    override suspend fun hiddenGems(page: Int): List<GameDto> = fromWorkerOrSeed(
+        fromWorker = { api.hiddenGems(page).results },
+        fromSeed = { if (page > 0) emptyList() else fallbackRandom().filter { (it.metacritic ?: 0) >= 80 } },
     )
 
-    override suspend fun byGenre(genreName: String): List<GameDto> = fromWorkerOrSeed(
-        fromWorker = { api.byGenre(genreName).results },
-        fromSeed = { fallbackRandom().filter { genreName in it.genres } },
+    override suspend fun byGenre(genreName: String, page: Int): List<GameDto> = fromWorkerOrSeed(
+        fromWorker = { api.byGenre(genreName, page).results },
+        fromSeed = { if (page > 0) emptyList() else fallbackRandom().filter { genreName in it.genres } },
     )
 
     /**
@@ -92,6 +98,25 @@ class WorkerGameDataSource @Inject constructor(
             throw cancellation
         } catch (error: Exception) {
             null
+        }
+    }
+
+    /**
+     * Never falls back to the seed set. The caller ([com.mikhilnaika.continueapp.core.data.GameCacheRepository])
+     * refreshes rows it already holds, so answering from local data would be a no-op dressed up
+     * as a success — and would stamp `cachedAt` forward, so the row would look fresh and never
+     * be retried. Empty means "ask again later".
+     */
+    override suspend fun byIds(ids: List<Long>): List<GameDto> {
+        // Seed ids are negative by construction, so they can never resolve against IGDB.
+        val real = ids.filter { it > 0 }
+        if (real.isEmpty()) return emptyList()
+        return try {
+            api.gamesBatch(real.joinToString(",")).results
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (error: Exception) {
+            emptyList()
         }
     }
 

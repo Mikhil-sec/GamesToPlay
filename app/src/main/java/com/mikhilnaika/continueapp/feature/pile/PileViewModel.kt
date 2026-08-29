@@ -2,89 +2,82 @@ package com.mikhilnaika.continueapp.feature.pile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mikhilnaika.continueapp.core.billing.BillingRepository
 import com.mikhilnaika.continueapp.core.data.AddSource
 import com.mikhilnaika.continueapp.core.data.PileState
 import com.mikhilnaika.continueapp.core.data.UserPreferencesRepository
+import com.mikhilnaika.continueapp.core.data.clearRewardKey
 import com.mikhilnaika.continueapp.core.data.dao.PileDao
-import com.mikhilnaika.continueapp.core.data.dao.PileEntryWithGame
 import com.mikhilnaika.continueapp.core.data.dao.RankingDao
 import com.mikhilnaika.continueapp.core.data.dao.StackDao
 import com.mikhilnaika.continueapp.core.data.entity.PileEntryEntity
+import com.mikhilnaika.continueapp.core.util.GameFacet
 import com.mikhilnaika.continueapp.core.util.estimatedHours
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
 /** docs/02-PRODUCT-SPEC.md §1 — NOW PLAYING is hard-capped at 3. */
 const val NOW_PLAYING_CAP = 3
 
-@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class PileViewModel @Inject constructor(
     private val pileDao: PileDao,
     private val stackDao: StackDao,
     private val rankingDao: RankingDao,
+    private val billingRepository: BillingRepository,
     private val userPreferencesRepository: UserPreferencesRepository,
 ) : ViewModel() {
 
     private val selectedState = MutableStateFlow(PileState.BACKLOG)
     private val viewMode = MutableStateFlow(PileUiState().viewMode)
-    private val sort = MutableStateFlow(PileSort.DATE_ADDED)
-    private val platformFilter = MutableStateFlow<String?>(null)
-    private val genreFilter = MutableStateFlow<String?>(null)
-    private val lengthBucketFilter = MutableStateFlow<LengthBucket?>(null)
-    private val hoursPerWeek = MutableStateFlow(6f)
+    private val filters = MutableStateFlow(PileFilters())
+    private val hoursPerWeek = MutableStateFlow(UserPreferencesRepository.DEFAULT_HOURS_PER_WEEK)
     private val swapPrompt = MutableStateFlow<SwapPrompt?>(null)
     private val showStackHint = MutableStateFlow(false)
 
     private val _uiState = MutableStateFlow(PileUiState())
     val state: StateFlow<PileUiState> = _uiState
 
-    private val json = Json { ignoreUnknownKeys = true }
-
     init {
+        // One query for the whole pile rather than one per tab. The tab split is a cheap
+        // in-memory partition of a list that is tens of rows long, and doing it here is what
+        // lets the filter chips be built from *every* game while their counts describe only the
+        // tab on screen — see PileFiltering.facetOptions.
         combine(
-            selectedState.flatMapLatest { pileDao.observeByState(it) },
-            sort,
-            platformFilter,
-            genreFilter,
-            lengthBucketFilter,
-        ) { rawEntries, sortOrder, platform, genre, lengthBucket ->
-            val filtered = rawEntries
-                .filter { platform == null || platformsOf(it).contains(platform) }
-                .filter { genre == null || genresOf(it).contains(genre) }
-                .filter { lengthBucket == null || fitsLengthBucket(it, lengthBucket) }
-            val sorted = sortEntries(filtered, sortOrder)
-            RawSnapshot(
-                sorted = sorted,
-                totalHours = filtered.sumOf { it.estimatedHours ?: 0 },
-                totalGames = filtered.size,
-                availablePlatforms = rawEntries.flatMap { platformsOf(it) }.distinct().sorted(),
-                availableGenres = rawEntries.flatMap { genresOf(it) }.distinct().sorted(),
+            pileDao.observeAll(),
+            selectedState,
+            filters,
+            hoursPerWeek,
+        ) { all, tab, activeFilters, hpw ->
+            val inTab = all.filter { it.state == tab }
+            val visible = PileFiltering.apply(inTab, activeFilters)
+            PileUiState(
+                selectedState = tab,
+                viewMode = viewMode.value,
+                entries = visible,
+                sort = activeFilters.sort,
+                facetFilters = activeFilters.facets,
+                platformFilters = activeFilters.platforms,
+                lengthBucketFilter = activeFilters.length,
+                availableFacets = PileFiltering.facetOptions(all, inTab, activeFilters.facets),
+                availablePlatforms = PileFiltering.platformOptions(all, inTab, activeFilters.platforms),
+                availableLengths = PileFiltering.lengthOptions(inTab),
+                totalHours = visible.sumOf { it.estimatedHours ?: 0 },
+                totalGames = visible.size,
+                hoursPerWeek = hpw,
+                swapPrompt = swapPrompt.value,
+                showStackHint = showStackHint.value,
+                isLoading = false,
             )
-        }.onEach { snapshot ->
-            _uiState.update {
-                it.copy(
-                    selectedState = selectedState.value,
-                    entries = snapshot.sorted,
-                    totalHours = snapshot.totalHours,
-                    totalGames = snapshot.totalGames,
-                    availablePlatforms = snapshot.availablePlatforms,
-                    availableGenres = snapshot.availableGenres,
-                    isLoading = false,
-                )
-            }
-        }.launchIn(viewModelScope)
+        }.onEach { snapshot -> _uiState.value = snapshot }.launchIn(viewModelScope)
 
         // Persisted, per docs/02-PRODUCT-SPEC.md §1. The stored value is a bare string, so an
         // enum constant that no longer exists (a downgrade, or a mode we drop later) falls back
@@ -95,48 +88,17 @@ class PileViewModel @Inject constructor(
             .launchIn(viewModelScope)
 
         viewMode.onEach { vm -> _uiState.update { it.copy(viewMode = vm) } }.launchIn(viewModelScope)
-        sort.onEach { s -> _uiState.update { it.copy(sort = s) } }.launchIn(viewModelScope)
-        platformFilter.onEach { p -> _uiState.update { it.copy(platformFilter = p) } }.launchIn(viewModelScope)
-        genreFilter.onEach { g -> _uiState.update { it.copy(genreFilter = g) } }.launchIn(viewModelScope)
-        lengthBucketFilter.onEach { l -> _uiState.update { it.copy(lengthBucketFilter = l) } }.launchIn(viewModelScope)
-        hoursPerWeek.onEach { hpw -> _uiState.update { it.copy(hoursPerWeek = hpw) } }.launchIn(viewModelScope)
         swapPrompt.onEach { prompt -> _uiState.update { it.copy(swapPrompt = prompt) } }.launchIn(viewModelScope)
+
+        userPreferencesRepository.hoursPerWeek
+            .onEach { hours -> hoursPerWeek.value = hours }
+            .launchIn(viewModelScope)
 
         userPreferencesRepository.isStackSwipeHintSeen
             .onEach { seen -> showStackHint.value = !seen }
             .launchIn(viewModelScope)
         showStackHint.onEach { show -> _uiState.update { it.copy(showStackHint = show) } }.launchIn(viewModelScope)
     }
-
-    private data class RawSnapshot(
-        val sorted: List<PileEntryWithGame>,
-        val totalHours: Int,
-        val totalGames: Int,
-        val availablePlatforms: List<String>,
-        val availableGenres: List<String>,
-    )
-
-    private fun platformsOf(entry: PileEntryWithGame): List<String> = decodeStringList(entry.platformsJson)
-    private fun genresOf(entry: PileEntryWithGame): List<String> = decodeStringList(entry.genresJson)
-
-    private fun decodeStringList(jsonStr: String): List<String> =
-        runCatching { json.decodeFromString<List<String>>(jsonStr) }.getOrDefault(emptyList())
-
-    private fun fitsLengthBucket(entry: PileEntryWithGame, bucket: LengthBucket): Boolean {
-        val hours = entry.estimatedHours ?: return false
-        val fitsMax = bucket.maxHours == null || hours <= bucket.maxHours
-        return hours >= bucket.minHours && fitsMax
-    }
-
-    private fun sortEntries(entries: List<PileEntryWithGame>, sortOrder: PileSort): List<PileEntryWithGame> =
-        when (sortOrder) {
-            PileSort.DATE_ADDED -> entries.sortedByDescending { it.addedAt }
-            PileSort.TITLE -> entries.sortedBy { it.name.lowercase() }
-            PileSort.LENGTH_SHORT_FIRST -> entries.sortedBy { it.estimatedHours ?: Int.MAX_VALUE }
-            PileSort.RATING -> entries // rating not denormalized onto PileEntryWithGame yet
-            PileSort.PLATFORM -> entries.sortedBy { it.ownedPlatform ?: "" }
-            PileSort.RELEASE_DATE -> entries.sortedByDescending { it.addedAt }
-        }
 
     fun selectTab(pileState: PileState) {
         selectedState.value = pileState
@@ -158,24 +120,34 @@ class PileViewModel @Inject constructor(
         viewModelScope.launch { userPreferencesRepository.setStackSwipeHintSeen() }
     }
 
-    fun setSort(newSort: PileSort) {
-        sort.value = newSort
+    fun setSort(newSort: PileSort) = filters.update { it.copy(sort = newSort) }
+
+    fun togglePlatformFilter(platform: String) = filters.update {
+        it.copy(platforms = it.platforms.toggle(platform))
     }
 
-    fun setPlatformFilter(platform: String?) {
-        platformFilter.value = if (platformFilter.value == platform) null else platform
+    fun toggleFacetFilter(facet: GameFacet) = filters.update {
+        it.copy(facets = it.facets.toggle(facet))
     }
 
-    fun setGenreFilter(genre: String?) {
-        genreFilter.value = if (genreFilter.value == genre) null else genre
+    /** Length stays single-select: the buckets are contiguous, so "under 5h or 40h+" is noise. */
+    fun setLengthBucketFilter(bucket: LengthBucket?) = filters.update {
+        it.copy(length = if (it.length == bucket) null else bucket)
     }
 
-    fun setLengthBucketFilter(bucket: LengthBucket?) {
-        lengthBucketFilter.value = if (lengthBucketFilter.value == bucket) null else bucket
-    }
+    fun clearFilters() = filters.update { PileFilters(sort = it.sort) }
 
+    private fun <T> Set<T>.toggle(value: T): Set<T> = if (value in this) this - value else this + value
+
+    /**
+     * The one input to "FINISHED BY 2029" — and, until now, the one input nothing could set.
+     *
+     * Written straight through to DataStore rather than held here: the flow above collects it
+     * back, so the value on screen is always the value on disk and a half-finished write can't
+     * leave the two disagreeing.
+     */
     fun setHoursPerWeek(hpw: Float) {
-        hoursPerWeek.value = hpw.coerceAtLeast(0.5f)
+        viewModelScope.launch { userPreferencesRepository.setHoursPerWeek(hpw) }
     }
 
     /**
@@ -230,6 +202,34 @@ class PileViewModel @Inject constructor(
     fun backToBacklog(entryId: Long) = viewModelScope.launch { setState(entryId, PileState.BACKLOG) }
 
     fun wishlist(entryId: Long) = viewModelScope.launch { setState(entryId, PileState.WISHLIST) }
+
+    /**
+     * Rewrites when a game was started and finished — the editor behind BACKDATE, and the whole
+     * answer to "I cleared this before I had the app".
+     *
+     * Setting a cleared date files the game under CLEARED, because a game with a finish date
+     * that isn't in CLEARED is a contradiction the rest of the app would have to keep
+     * apologising for (THIS YEAR counts it, the Credits Roll ordinal doesn't, STATS disagrees
+     * with both). The dialog says so before it writes.
+     *
+     * **A backdated clear pays no coins, and burns the reward key so it can never pay any.**
+     * Clearing a game is worth +5 because it took months; logging a game you finished in 2019
+     * takes four taps, and paying for it would be a faster faucet than the repeatable-clear loop
+     * this release just closed. See `CoinLedger.markClaimed`.
+     */
+    fun setDates(entryId: Long, startedAt: Long?, finishedAt: Long?) = viewModelScope.launch {
+        val entry = pileDao.getById(entryId) ?: return@launch
+        if (finishedAt != null && entry.state != PileState.COMPLETED) {
+            billingRepository.markRewardClaimed(clearRewardKey(entry.gameId))
+        }
+        pileDao.update(
+            entry.copy(
+                startedAt = startedAt,
+                finishedAt = finishedAt,
+                state = if (finishedAt != null) PileState.COMPLETED else entry.state,
+            )
+        )
+    }
 
     /**
      * Routes a chosen target state to the right transition. NOW PLAYING is deliberately not

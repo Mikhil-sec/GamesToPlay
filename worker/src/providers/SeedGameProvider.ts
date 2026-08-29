@@ -61,35 +61,42 @@ export class SeedGameProvider implements GameProvider {
     return game ? toDto(game) : null;
   }
 
-  async trending(): Promise<GameDto[]> {
-    // No real popularity signal in the seed set; a stable pseudo-random sample reads better
-    // in a demo than always showing the same first 20 alphabetically-adjacent entries.
-    return sample(seedGames, 20).map(toDto);
+  async byIds(ids: number[]): Promise<GameDto[]> {
+    const wanted = new Set(ids);
+    return seedGames.filter((g) => wanted.has(g.id)).map(toDto);
   }
 
-  async shortAndSweet(): Promise<GameDto[]> {
-    return seedGames
-      .filter((g) => (g.playtimeHoursNormally ?? Infinity) < 8)
-      .slice(0, 20)
-      .map(toDto);
+  async trending(offset = 0): Promise<GameDto[]> {
+    // No real popularity signal in the seed set; a stable pseudo-random sample reads better
+    // in a demo than always showing the same first 20 alphabetically-adjacent entries.
+    return page(sample(seedGames, 20 + offset), offset).map(toDto);
+  }
+
+  async shortAndSweet(offset = 0): Promise<GameDto[]> {
+    return page(
+      seedGames.filter((g) => (g.playtimeHoursNormally ?? Infinity) < 8),
+      offset,
+    ).map(toDto);
   }
 
   /** Newest first by release date — the seed set carries `released` as an ISO date string. */
-  async newReleases(): Promise<GameDto[]> {
-    return seedGames
-      .filter((g) => g.released !== null)
-      .sort((a, b) => (b.released ?? "").localeCompare(a.released ?? ""))
-      .slice(0, 20)
-      .map(toDto);
+  async newReleases(offset = 0): Promise<GameDto[]> {
+    return page(
+      seedGames
+        .filter((g) => g.released !== null)
+        .sort((a, b) => (b.released ?? "").localeCompare(a.released ?? "")),
+      offset,
+    ).map(toDto);
   }
 
   /** Well-rated but not famous — the seed set's only popularity signal is `metacritic`. */
-  async hiddenGems(): Promise<GameDto[]> {
-    return seedGames
-      .filter((g) => (g.metacritic ?? 0) >= 80)
-      .sort((a, b) => (b.metacritic ?? 0) - (a.metacritic ?? 0))
-      .slice(0, 20)
-      .map(toDto);
+  async hiddenGems(offset = 0): Promise<GameDto[]> {
+    return page(
+      seedGames
+        .filter((g) => (g.metacritic ?? 0) >= 80)
+        .sort((a, b) => (b.metacritic ?? 0) - (a.metacritic ?? 0)),
+      offset,
+    ).map(toDto);
   }
 
   /**
@@ -101,14 +108,16 @@ export class SeedGameProvider implements GameProvider {
     return seedGenreNames().map((name, index) => ({ id: index + 1, name }));
   }
 
-  async byGenre(genreId: number): Promise<GameDto[]> {
+  async byGenre(genreId: number, offset = 0): Promise<GameDto[]> {
     const name = seedGenreNames()[genreId - 1];
     if (!name) return [];
-    return seedGames
-      .filter((g) => g.genres.includes(name))
-      .slice(0, 20)
-      .map(toDto);
+    return page(seedGames.filter((g) => g.genres.includes(name)), offset).map(toDto);
   }
+}
+
+/** One rail page of 20, so SHOW MORE behaves the same offline as it does against IGDB. */
+function page<T>(items: T[], offset: number): T[] {
+  return items.slice(offset, offset + 20);
 }
 
 function seedGenreNames(): string[] {

@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -21,6 +22,8 @@ class UserPreferencesRepository @Inject constructor(
         val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
         val PILE_VIEW_MODE = stringPreferencesKey("pile_view_mode")
         val STACK_SWIPE_HINT_SEEN = booleanPreferencesKey("stack_swipe_hint_seen")
+        val HOURS_PER_WEEK = floatPreferencesKey("hours_per_week")
+        val LAST_CLIPBOARD_SUGGESTION = stringPreferencesKey("last_clipboard_suggestion")
     }
 
     val isOnboardingComplete: Flow<Boolean> =
@@ -71,5 +74,45 @@ class UserPreferencesRepository @Inject constructor(
 
     suspend fun setStackSwipeHintSeen() {
         dataStore.edit { it[Keys.STACK_SWIPE_HINT_SEEN] = true }
+    }
+
+    /**
+     * How many hours a week the user actually plays — the input to PILE's "FINISHED BY 2029".
+     *
+     * It was a `MutableStateFlow` inside `PileViewModel` that nothing could write to, so the
+     * headline number on the app's signature bar was derived from a hardcoded 6 and the same for
+     * everybody. Persisted rather than kept per-ViewModel because it's a fact about the person,
+     * not about this visit to the screen.
+     */
+    val hoursPerWeek: Flow<Float> =
+        dataStore.data.map { it[Keys.HOURS_PER_WEEK] ?: DEFAULT_HOURS_PER_WEEK }
+
+    suspend fun setHoursPerWeek(hours: Float) {
+        dataStore.edit { it[Keys.HOURS_PER_WEEK] = hours.coerceIn(MIN_HOURS_PER_WEEK, MAX_HOURS_PER_WEEK) }
+    }
+
+    /**
+     * The last clipboard text the nudge already acted on — added or dismissed.
+     *
+     * Persisted so a dismissal survives a relaunch. Re-offering a suggestion the user has already
+     * said no to is precisely the "irritation when it's wrong" the spec warns about
+     * (docs/02-PRODUCT-SPEC.md §2d, "bias toward silence").
+     */
+    val lastClipboardSuggestion: Flow<String?> =
+        dataStore.data.map { it[Keys.LAST_CLIPBOARD_SUGGESTION] }
+
+    suspend fun setLastClipboardSuggestion(text: String) {
+        dataStore.edit { it[Keys.LAST_CLIPBOARD_SUGGESTION] = text }
+    }
+
+    companion object {
+        /** A couple of evenings a week — the assumption the bar used to hardcode. */
+        const val DEFAULT_HOURS_PER_WEEK = 6f
+
+        /** Below this the finish date stops being a projection and starts being a joke. */
+        const val MIN_HOURS_PER_WEEK = 1f
+
+        /** 40h/week is a full-time job. Anything past it isn't a backlog problem. */
+        const val MAX_HOURS_PER_WEEK = 40f
     }
 }

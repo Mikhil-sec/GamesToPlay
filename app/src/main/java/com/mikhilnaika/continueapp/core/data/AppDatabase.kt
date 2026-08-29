@@ -28,7 +28,9 @@ import com.mikhilnaika.continueapp.core.data.entity.StackMemberEntity
         StackMemberEntity::class,
         DrawEntity::class,
     ],
-    version = 1,
+    // Declared in one place — see DatabaseSchema for why the number and the migrations that
+    // service it have to live next to each other.
+    version = DatabaseSchema.VERSION,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

@@ -43,6 +43,21 @@ interface BillingRepository {
      */
     suspend fun earnCoins(amount: Int, reason: String): SpendResult
 
+    /**
+     * Credits [amount] the first time [rewardKey] is claimed, and never again.
+     *
+     * Returns true when coins were actually granted. Backs the clear-a-game reward, which was
+     * repeatable — clear, move back to THE PILE, clear again — until a closed tester pointed
+     * out the loop. See [com.mikhilnaika.continueapp.core.data.CoinLedger.earnOnce].
+     */
+    suspend fun earnCoinsOnce(rewardKey: String, amount: Int, reason: String): Boolean
+
+    /**
+     * Records [rewardKey] as claimed without paying anything out — what a backdated clear does,
+     * so logging your back catalogue can't be used as a coin faucet.
+     */
+    suspend fun markRewardClaimed(rewardKey: String)
+
     /** The first purchasable package in the current offering, or null if none is configured yet. */
     suspend fun currentOfferingPackage(): Package?
 

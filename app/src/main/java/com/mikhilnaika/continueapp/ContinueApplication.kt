@@ -9,6 +9,7 @@ import coil3.disk.directory
 import coil3.memory.MemoryCache
 import coil3.request.crossfade
 import com.google.android.gms.ads.MobileAds
+import com.mikhilnaika.continueapp.core.data.GameCacheRepository
 import com.mikhilnaika.continueapp.core.data.SeedLoader
 import com.mikhilnaika.continueapp.core.offline.OfflineGameIndex
 import com.revenuecat.purchases.LogLevel
@@ -29,6 +30,9 @@ class ContinueApplication : Application(), SingletonImageLoader.Factory {
 
     @Inject
     lateinit var offlineGameIndex: OfflineGameIndex
+
+    @Inject
+    lateinit var gameCacheRepository: GameCacheRepository
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -55,6 +59,12 @@ class ContinueApplication : Application(), SingletonImageLoader.Factory {
         // one. Injecting the field already started the load; this just makes it explicit.
         applicationScope.launch {
             offlineGameIndex.warmUp()
+        }
+        // One request, no KV writes, and only when there is actually something stale — see
+        // GameCacheRepository. Deliberately last and unawaited: it improves data the app can
+        // already draw, so it must never be on the path to the first frame.
+        applicationScope.launch {
+            gameCacheRepository.refreshStaleGamesOnce()
         }
     }
 

@@ -12,15 +12,25 @@ import com.mikhilnaika.continueapp.core.network.dto.ResolveResponse
  */
 interface GameDataSource {
     suspend fun search(query: String): List<GameDto>
-    suspend fun trending(): List<GameDto>
-    suspend fun shortAndSweet(): List<GameDto>
-    suspend fun newReleases(): List<GameDto>
-    suspend fun hiddenGems(): List<GameDto>
+
+    // `page` is what DISCOVER's SHOW MORE spends. 0 is the first 20 and behaves exactly as
+    // before; the Worker clamps how deep a client may go.
+    suspend fun trending(page: Int = 0): List<GameDto>
+    suspend fun shortAndSweet(page: Int = 0): List<GameDto>
+    suspend fun newReleases(page: Int = 0): List<GameDto>
+    suspend fun hiddenGems(page: Int = 0): List<GameDto>
 
     /** [genreName] must be IGDB's own genre name, e.g. "Role-playing (RPG)". */
-    suspend fun byGenre(genreName: String): List<GameDto>
+    suspend fun byGenre(genreName: String, page: Int = 0): List<GameDto>
     suspend fun resolve(text: String?, subject: String?): ResolveResponse
 
     /** One game by IGDB id. Null when unreachable or unknown — never throws. */
     suspend fun detail(id: Long): GameDto?
+
+    /**
+     * Several games by IGDB id in one round trip. Unknown ids are simply absent; an empty list
+     * means "couldn't reach the Worker", which callers must treat as "try again later" rather
+     * than "these games don't exist".
+     */
+    suspend fun byIds(ids: List<Long>): List<GameDto>
 }

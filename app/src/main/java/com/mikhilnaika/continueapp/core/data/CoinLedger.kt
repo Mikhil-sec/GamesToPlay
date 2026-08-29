@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -39,6 +40,15 @@ class CoinLedger @Inject constructor(
         /** Tracked separately so a future server reconciliation can tell earned from bought. */
         val LIFETIME_EARNED = intPreferencesKey("coin_lifetime_earned")
         val LIFETIME_PURCHASED = intPreferencesKey("coin_lifetime_purchased")
+
+        /**
+         * Reward keys already paid out — see [earnOnce].
+         *
+         * A set of opaque strings rather than a per-feature flag so that any future
+         * once-per-thing reward (a trophy, a streak milestone) reuses the same mechanism
+         * instead of inventing another one that has to be remembered about.
+         */
+        val CLAIMED_REWARDS = stringSetPreferencesKey("claimed_rewards")
     }
 
     /** Enough for one DRAW on first launch, so the economy is discoverable before it bites. */
@@ -50,6 +60,53 @@ class CoinLedger @Inject constructor(
 
     /** Credits coins from an in-app reward (ad watch, game cleared, streak). */
     suspend fun earn(amount: Int): Int = adjust(amount, Keys.LIFETIME_EARNED)
+
+    /**
+     * Credits [amount] the **first** time [rewardKey] is claimed, and never again.
+     *
+     * Closing the one economy hole a closed tester found: clearing a game paid coins, and
+     * nothing stopped the same game being moved back to THE PILE and cleared again, so the
+     * "+5 COINS" of the Credits Roll was an unbounded faucet for anyone who noticed. The reward
+     * is a property of the *game*, not of the transition, so the key is the game — re-clearing
+     * a game you genuinely replayed is still celebrated, it just isn't paid for twice.
+     *
+     * The check and the write share one `edit` transaction, so two taps racing each other
+     * (a double-tap on CLEARED, or the Credits Roll being recomposed) can't both pass.
+     *
+     * @return the new balance, or `null` if [rewardKey] had already been claimed.
+     */
+    suspend fun earnOnce(rewardKey: String, amount: Int): Int? {
+        var updated: Int? = null
+        dataStore.edit { prefs ->
+            val claimed = prefs[Keys.CLAIMED_REWARDS].orEmpty()
+            if (rewardKey in claimed) return@edit
+            prefs[Keys.CLAIMED_REWARDS] = claimed + rewardKey
+            val balance = (prefs[Keys.BALANCE] ?: startingBalance) + amount
+            prefs[Keys.BALANCE] = balance
+            prefs[Keys.LIFETIME_EARNED] = (prefs[Keys.LIFETIME_EARNED] ?: 0) + amount
+            updated = balance
+        }
+        return updated
+    }
+
+    /**
+     * Burns [rewardKey] without paying anything out.
+     *
+     * What a backdated clear does. Logging games finished before the app existed is
+     * record-keeping, not an achievement, and paying for it would hand anyone who wanted coins
+     * a faster faucet than the one [earnOnce] just closed — you can backdate a hundred games in
+     * a minute. Marking the key claimed also means the same game can't then be un-cleared and
+     * re-cleared for the coins it deliberately didn't earn.
+     */
+    suspend fun markClaimed(rewardKey: String) {
+        dataStore.edit { prefs ->
+            prefs[Keys.CLAIMED_REWARDS] = prefs[Keys.CLAIMED_REWARDS].orEmpty() + rewardKey
+        }
+    }
+
+    /** Whether [rewardKey] has already been paid out (or deliberately burned). */
+    suspend fun isClaimed(rewardKey: String): Boolean =
+        dataStore.data.map { it[Keys.CLAIMED_REWARDS].orEmpty() }.first().contains(rewardKey)
 
     /** Credits coins that RevenueCat granted for a real purchase. */
     suspend fun creditPurchased(amount: Int): Int = adjust(amount, Keys.LIFETIME_PURCHASED)

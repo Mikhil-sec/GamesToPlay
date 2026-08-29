@@ -17,6 +17,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.mikhilnaika.continueapp.core.ui.ArcadeNavItem
 import com.mikhilnaika.continueapp.core.ui.ArcadeScaffold
+import androidx.compose.foundation.layout.fillMaxSize
+import com.mikhilnaika.continueapp.feature.clipboard.ClipboardNudge
 import com.mikhilnaika.continueapp.feature.completion.CreditsRollScreen
 import com.mikhilnaika.continueapp.feature.discover.DiscoverScreen
 import com.mikhilnaika.continueapp.feature.draw.DrawScreen
@@ -27,6 +29,7 @@ import com.mikhilnaika.continueapp.feature.profile.ProfileScreen
 import com.mikhilnaika.continueapp.feature.rank.RankScreen
 import com.mikhilnaika.continueapp.feature.share.PileShareScreen
 import com.mikhilnaika.continueapp.feature.stacks.StacksScreen
+import com.mikhilnaika.continueapp.feature.stats.StatsScreen
 
 /**
  * Root nav graph. Onboarding gates everything else (docs/02-PRODUCT-SPEC.md §8) and is
@@ -79,6 +82,7 @@ fun ContinueNavHost(
         showBottomBar = showBottomBar,
         showCoinCounter = showCoinCounter,
     ) { padding ->
+      androidx.compose.foundation.layout.Box(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
         NavHost(navController = navController, startDestination = startDestination, modifier = padding) {
             composable(NavDestinations.ONBOARDING) {
                 OnboardingScreen(onFinished = { startAtDiscover ->
@@ -96,9 +100,11 @@ fun ContinueNavHost(
                     },
                     onOpenStacks = { navController.navigate(NavDestinations.STACKS) },
                     onOpenShare = { navController.navigate(NavDestinations.SHARE_PILE) },
+                    onOpenStats = { navController.navigate(NavDestinations.STATS) },
                 )
             }
             composable(NavDestinations.STACKS) { StacksScreen() }
+            composable(NavDestinations.STATS) { StatsScreen(onBack = { navController.popBackStack() }) }
             composable(NavDestinations.SHARE_PILE) { PileShareScreen(onDismiss = { navController.popBackStack() }) }
             composable(NavDestinations.DISCOVER) { DiscoverScreen() }
             composable(NavDestinations.DRAW) {
@@ -110,7 +116,10 @@ fun ContinueNavHost(
                 )
             }
             composable(NavDestinations.PROFILE) {
-                ProfileScreen(onGoPro = { navController.navigate(NavDestinations.PAYWALL) })
+                ProfileScreen(
+                    onGoPro = { navController.navigate(NavDestinations.PAYWALL) },
+                    onOpenStats = { navController.navigate(NavDestinations.STATS) },
+                )
             }
             composable(NavDestinations.PAYWALL) {
                 PaywallScreen(onDismiss = { navController.popBackStack() })
@@ -139,5 +148,16 @@ fun ContinueNavHost(
                 })
             }
         }
+
+        // Sits above the whole graph rather than on one screen: the clipboard is checked on
+        // every foreground, and the user could be anywhere. Suppressed on the full-screen
+        // routes for the same reason the bottom bar is — the Credits Roll and the paywall are
+        // moments, and a banner sliding into one is an interruption, not a nudge.
+        if (showBottomBar) {
+            ClipboardNudge(
+                modifier = androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
+            )
+        }
+      }
     }
 }

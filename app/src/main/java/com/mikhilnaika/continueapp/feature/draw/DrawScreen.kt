@@ -51,6 +51,8 @@ import com.mikhilnaika.continueapp.core.design.ContinueMotion
 import com.mikhilnaika.continueapp.core.design.ContinueSpacing
 import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
 import com.mikhilnaika.continueapp.core.ui.EmptyState
+import com.mikhilnaika.continueapp.core.util.GameFacet
+import com.mikhilnaika.continueapp.core.ui.LocalHaptics
 import com.mikhilnaika.continueapp.core.util.Haptics
 import com.mikhilnaika.continueapp.core.util.findActivity
 import kotlinx.coroutines.launch
@@ -69,7 +71,7 @@ fun DrawScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
-    val haptics = remember { Haptics(context) }
+    val haptics = LocalHaptics.current
 
     // The paywall is a separate destination, so DRAW is recomposed on the way back with a
     // possibly-changed entitlement. If PRO was bought there, drop the gate and deal.
@@ -81,6 +83,7 @@ fun DrawScreen(
             onTimeBudget = viewModel::setTimeBudget,
             onMood = viewModel::setMood,
             onTogglePlatform = viewModel::togglePlatform,
+            onToggleFacet = viewModel::toggleFacet,
             onPullLever = viewModel::pullLever,
             haptics = haptics,
             modifier = modifier,
@@ -128,6 +131,7 @@ private fun DrawDialsScreen(
     onTimeBudget: (TimeBudget) -> Unit,
     onMood: (Mood) -> Unit,
     onTogglePlatform: (String) -> Unit,
+    onToggleFacet: (GameFacet) -> Unit,
     onPullLever: () -> Unit,
     haptics: Haptics,
     modifier: Modifier = Modifier,
@@ -208,6 +212,20 @@ private fun DrawDialsScreen(
                             )
                         }
                     }
+                    // GENRE sits between MOOD and PLATFORM because that is the order the
+                    // question gets asked: how long have I got, what am I in the mood for, what
+                    // *kind* of thing, and only then what am I willing to boot up.
+                    if (state.availableFacets.isNotEmpty()) {
+                        DialSection(title = "GENRE") {
+                            state.availableFacets.forEach { facet ->
+                                FilterChip(
+                                    selected = facet in state.selectedFacets,
+                                    onClick = { onToggleFacet(facet) },
+                                    label = { Text(facet.label) },
+                                )
+                            }
+                        }
+                    }
                     if (state.availablePlatforms.isNotEmpty()) {
                         DialSection(title = "PLATFORM") {
                             state.availablePlatforms.forEach { platform ->
@@ -246,12 +264,17 @@ private fun DrawDialsScreen(
 private fun dialSummary(state: DrawUiState): String = listOfNotNull(
     budgetLabel(state.timeBudget),
     state.mood.name,
+    when (state.selectedFacets.size) {
+        0 -> null
+        1 -> state.selectedFacets.first().label
+        else -> "${state.selectedFacets.size} GENRES"
+    },
     when (state.selectedPlatforms.size) {
         0 -> null
         1 -> state.selectedPlatforms.first().uppercase()
         else -> "${state.selectedPlatforms.size} PLATFORMS"
     },
-).joinToString("  ·  ")
+).joinToString("  \u00b7  ")
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable

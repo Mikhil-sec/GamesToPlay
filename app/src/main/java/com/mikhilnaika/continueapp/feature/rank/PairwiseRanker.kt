@@ -1,6 +1,7 @@
 package com.mikhilnaika.continueapp.feature.rank
 
 import com.mikhilnaika.continueapp.core.data.RankBucket
+import com.mikhilnaika.continueapp.core.data.dao.RankPlacement
 import com.mikhilnaika.continueapp.core.data.entity.RankingEntity
 
 /** docs/02-PRODUCT-SPEC.md §5 — coarser buckets always outrank finer ones globally. */
@@ -39,4 +40,52 @@ object PairwiseRanker {
 
     /** Binary-search midpoint for the next comparison within an [lo, hi) insertion range. */
     fun nextComparisonIndex(lo: Int, hi: Int): Int = (lo + hi) / 2
+
+    /**
+     * The leaderboard after dragging one entry [delta] slots — the manual override for RANK's
+     * automatic placement.
+     *
+     * Pairwise comparison is a good way to *enter* a ranking and a bad way to fix one: five
+     * questions place a game approximately, and there was no way at all to say "no, that one's
+     * higher". This is that way, and it's the only place in the app that writes a position a
+     * comparison didn't decide.
+     *
+     * **The moved game adopts its new neighbourhood's bucket**, taking it from the entry now
+     * directly above it (or below, at the very top). Without that a game dragged past a bucket
+     * boundary would leave the buckets interleaved, and every *later* automatic placement would
+     * be wrong: [globalPosition] and [bucketMembers] both assume a bucket is one contiguous run.
+     * The visible consequence is small and correct — dragging a game above your LOVED games
+     * makes it loved.
+     *
+     * Returns the complete new order, densely numbered by the caller ([RankingDao.reorder]);
+     * out-of-range moves clamp rather than throw, because the buttons that call this sit next
+     * to a list that can change underneath them.
+     */
+    fun reorderedPlacements(
+        current: List<RankingEntity>,
+        fromIndex: Int,
+        delta: Int,
+    ): List<RankPlacement> {
+        val ordered = current.sortedBy { it.position }
+        if (fromIndex !in ordered.indices) return ordered.map { RankPlacement(it.gameId, it.bucket) }
+        val toIndex = (fromIndex + delta).coerceIn(0, ordered.lastIndex)
+        if (toIndex == fromIndex) return ordered.map { RankPlacement(it.gameId, it.bucket) }
+
+        val rearranged = ordered.toMutableList()
+        val moved = rearranged.removeAt(fromIndex)
+        rearranged.add(toIndex, moved)
+
+        val neighbourBucket = rearranged.getOrNull(toIndex - 1)?.bucket
+            ?: rearranged.getOrNull(toIndex + 1)?.bucket
+            ?: moved.bucket
+        return rearranged.mapIndexed { index, entry ->
+            RankPlacement(entry.gameId, if (index == toIndex) neighbourBucket else entry.bucket)
+        }
+    }
+
+    /** The order with one game taken out, ready to be renumbered densely. */
+    fun withoutGame(current: List<RankingEntity>, gameId: Long): List<RankPlacement> =
+        current.sortedBy { it.position }
+            .filter { it.gameId != gameId }
+            .map { RankPlacement(it.gameId, it.bucket) }
 }

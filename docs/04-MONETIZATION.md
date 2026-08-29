@@ -112,10 +112,22 @@ cancellation flows, and restore. Cheap to add, and it reads as production-grade.
 |---|---|---|
 | Watch a rewarded ad | **+1** | 5/day |
 | Daily streak check-in | +1 | 1/day |
-| Clear a game | +5 | — |
+| Clear a game | +5 | **once per game, ever** |
 | Rank 5 games | +2 | — |
 | First Steam import | +10 | once |
 | Pro monthly stipend | +50 | monthly |
+
+**"Once per game, ever" is load-bearing, not tidiness.** A closed tester found the loop on
+2026-08-28: clear a game, move it back to THE PILE, clear it again, +5 every time, forever. The
+reward is a property of the *game* rather than of the transition, so it is claimed against a key
+(`clear:<gameId>`) held in `CoinLedger`'s claimed-reward set. A genuine replay still gets the
+whole Credits Roll — the cinematic just says `ALREADY PAID FOR THIS ONE` instead of promising
+coins the balance won't show.
+
+The same mechanism is what makes **backdating safe**: logging a game you cleared in 2019 burns
+the key without granting anything (`CoinLedger.markClaimed`), so a back catalogue can't be turned
+into currency and the same game can't then be un-cleared and re-cleared for the coins it
+deliberately didn't earn.
 
 ### Buying (consumable IAP)
 

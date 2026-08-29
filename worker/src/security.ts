@@ -113,6 +113,48 @@ export async function readJsonBody<T>(request: Request): Promise<T | null> {
 }
 
 /**
+ * Deepest rail page a client may ask for — "SHOW MORE", twice.
+ *
+ * The cap is the whole reason paging is safe. Rail cache keys are **not** user-specific, so
+ * paging adds a fixed handful of KV entries in total (`trending:p1`, `trending:p2`, ...)
+ * rather than one per user; an *uncapped* `page` would let a script mint unbounded keys
+ * against the 1,000 writes/day budget this file exists to protect.
+ */
+export const MAX_PAGE = 2;
+
+/** Games per rail page — matches every provider's `limit 20`. */
+export const PAGE_SIZE = 20;
+
+/** Hard ceiling on how many ids one `/games/batch` refresh may name. */
+export const MAX_BATCH_IDS = 50;
+
+/** Parses a `?page=` value, clamped to [0, [MAX_PAGE]]. Anything unparseable reads as page 0. */
+export function sanitizePage(raw: string | null): number {
+  const parsed = Number(raw ?? "0");
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.min(Math.max(Math.trunc(parsed), 0), MAX_PAGE);
+}
+
+/**
+ * Parses `?ids=1,2,3` into distinct positive integers, at most [max] of them.
+ *
+ * Parsing to `number` *before* the provider query is built is what keeps client input out of
+ * apicalypse syntax, and the cap bounds the work one request can cause. Malformed entries are
+ * dropped rather than failing the request: one stale id in a client's pile shouldn't cost it
+ * the refresh of every other game.
+ */
+export function sanitizeIds(raw: string | null, max: number = MAX_BATCH_IDS): number[] {
+  const ids: number[] = [];
+  if (!raw) return ids;
+  for (const part of raw.split(",")) {
+    const parsed = Number(part.trim());
+    if (Number.isSafeInteger(parsed) && parsed > 0 && !ids.includes(parsed)) ids.push(parsed);
+    if (ids.length >= max) break;
+  }
+  return ids;
+}
+
+/**
  * Exact-host or true-subdomain match.
  *
  * Replaces `hostname.includes("tiktok.com")`, which was a genuine SSRF hole: the Worker

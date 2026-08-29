@@ -10,6 +10,7 @@ import com.mikhilnaika.continueapp.core.data.dao.GameDao
 import com.mikhilnaika.continueapp.core.data.dao.PileDao
 import com.mikhilnaika.continueapp.core.data.dao.RankingDao
 import com.mikhilnaika.continueapp.core.util.estimatedHours
+import com.mikhilnaika.continueapp.feature.rank.PairwiseRanker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +22,13 @@ import kotlinx.coroutines.launch
 import java.util.Calendar
 import javax.inject.Inject
 
-data class HighScoreEntry(val position: Int, val name: String, val coverUrl: String?, val verdict: String?)
+data class HighScoreEntry(
+    val gameId: Long,
+    val position: Int,
+    val name: String,
+    val coverUrl: String?,
+    val verdict: String?,
+)
 
 data class Trophy(val id: String, val label: String, val description: String, val unlocked: Boolean)
 
@@ -59,7 +66,13 @@ class ProfileViewModel @Inject constructor(
         rankingDao.observeAll().onEach { rankings ->
             val entries = rankings.mapIndexed { index, ranking ->
                 val game = gameDao.get(ranking.gameId)
-                HighScoreEntry(index + 1, game?.name ?: "", game?.coverUrl, ranking.verdict)
+                HighScoreEntry(
+                    gameId = ranking.gameId,
+                    position = index + 1,
+                    name = game?.name ?: "",
+                    coverUrl = game?.coverUrl,
+                    verdict = ranking.verdict,
+                )
             }
             _state.update { it.copy(highScores = entries) }
             refreshTrophies()
@@ -146,6 +159,37 @@ class ProfileViewModel @Inject constructor(
                 ),
             )
         }
+    }
+
+    /**
+     * Nudge one game up or down the leaderboard.
+     *
+     * RANK places a game with up to five pairwise comparisons, which is a good way to *enter* a
+     * ranking and a poor way to correct one — there was no way at all to say "no, that one's
+     * higher", and a mis-tap during the comparisons was permanent. The arithmetic (including
+     * what happens to the game's bucket when it crosses a boundary) is in
+     * [PairwiseRanker.reorderedPlacements]; this just supplies the current order and writes the
+     * result back in one transaction.
+     */
+    fun moveHighScore(gameId: Long, delta: Int) = viewModelScope.launch {
+        val current = rankingDao.getAll()
+        val index = current.sortedBy { it.position }.indexOfFirst { it.gameId == gameId }
+        if (index < 0) return@launch
+        rankingDao.reorder(PairwiseRanker.reorderedPlacements(current, index, delta))
+    }
+
+    /**
+     * Drop a game off the leaderboard without touching the pile.
+     *
+     * The game stays exactly where it is in CLEARED — this only says "I don't want it ranked",
+     * which until now had no expression at all: the only way out of HIGH SCORES was REMOVE FROM
+     * PILE, which erases the game entirely. The survivors are renumbered so the leaderboard has
+     * no hole in it.
+     */
+    fun removeHighScore(gameId: Long) = viewModelScope.launch {
+        val current = rankingDao.getAll()
+        rankingDao.deleteByGameId(gameId)
+        rankingDao.reorder(PairwiseRanker.withoutGame(current, gameId))
     }
 
     fun setHapticsEnabled(enabled: Boolean) = viewModelScope.launch { userPreferencesRepository.setHapticsEnabled(enabled) }

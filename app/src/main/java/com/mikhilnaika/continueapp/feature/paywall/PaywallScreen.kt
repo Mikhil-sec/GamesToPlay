@@ -56,7 +56,7 @@ import com.mikhilnaika.continueapp.core.design.ContinueShapes
 import com.mikhilnaika.continueapp.core.design.ContinueSpacing
 import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
 import com.mikhilnaika.continueapp.core.ui.ArcadeButton
-import com.mikhilnaika.continueapp.core.util.Haptics
+import com.mikhilnaika.continueapp.core.ui.LocalHaptics
 import com.mikhilnaika.continueapp.core.util.findActivity
 
 /**
@@ -79,7 +79,7 @@ fun PaywallScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
-    val haptics = remember { Haptics(context) }
+    val haptics = LocalHaptics.current
 
     // Leaving on success rather than showing a confirmation screen: the entitlement propagates
     // through RevenueCat's customer-info listener, so the screen the user came from is already

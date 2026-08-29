@@ -47,7 +47,7 @@ Toggle in the top bar, state persisted:
 2. **GRID** — dense box-art grid, 3 columns. The practical view.
 3. **LIST** — compact rows with title, platform, hours, status. The power view.
 
-### The Time Budget bar
+### The Time Budget bar — hours per week is now yours to set
 
 Pinned under the top bar on PILE. Compact by default:
 
@@ -72,11 +72,65 @@ A game can belong to many stacks. Drag-and-drop to reorder and to move between s
 
 ### Sort & filter
 
-Sort: date added · title · length (short→long) · rating · platform · release date.
-Filter: platform · genre · length bucket (<5h / 5–15h / 15–40h / 40h+) · state · stack.
+Sort: date added · title · length (short→long) · rating · platform · release date. **Every one
+of these is a chip generated from the `PileSort` enum**, so an option can't be declared and then
+be unreachable — which is what had happened to three of the six, two of which also did nothing
+when selected.
+
+Filter, in three labelled groups: **length bucket** (<5h / 5–15h / 15–40h / 40h+, single-select),
+**genre & mood**, **platform** (both multi-select).
+
+Three rules, all of them fixes for the 2026-08-28 report that the filters were inconsistent
+between categories and with DRAW:
+
+- **One vocabulary, three screens.** Genre chips are `GameTaxonomy` facets — matched across
+  IGDB's genres, themes *and* game modes — so HORROR, MULTIPLAYER and CO-OP exist at all, and
+  so PILE, DRAW's GENRE dial and STATS narrow the same pile by the same things.
+- **The chip set is built from the whole pile, not the current tab**, so it doesn't change under
+  your thumb when you switch tab.
+- **Every chip carries its count in the tab you're looking at**, and a chip matching nothing here
+  shows `0` rather than vanishing — a filter that silently disappears is how an empty-looking
+  pile gets blamed on the app.
+
+Multi-select is **OR within a group, AND between groups**: HORROR + CO-OP means either; HORROR +
+PS5 means both. That's the only arrangement where adding a second chip of the same kind can't
+make the list shrink to nothing.
 
 **"Shortest first"** deserves a dedicated one-tap chip — it's how people actually beat a
 backlog, and surfacing it is a genuine insight about the use case.
+
+### Dates — logging games you cleared before you had the app
+
+Every pile entry can be given a **started** and a **cleared** date, from two places:
+
+- **DISCOVER → long-press (or tap the title) → ALREADY CLEARED** — adds a game straight to
+  CLEARED with the dates you pick. `addedAt` is backdated too, so "time in the pile" and the
+  RECENT sort both read as history rather than as something added today.
+- **PILE → a game → EDIT DATES** — for one already in the pile. Setting a cleared date files it
+  under CLEARED, and the dialog says so before it writes.
+
+A cleared date can't precede a started date, and neither can be in the future — both are blocked
+in the picker rather than validated afterwards.
+
+**A backdated clear pays no coins.** Clearing a game is worth +5 because it took months; logging
+a game you finished in 2019 takes four taps, and paying for it would be a faster coin faucet than
+the repeatable-clear loop closed in the same release. See `docs/04-MONETIZATION.md`.
+
+### STATS — what the pile is made of
+
+Reached from PILE's header. A scope selector (EVERYTHING, or any one state) over:
+
+- **THE SPREAD** — every state as one proportional bar. 40 in THE PILE against 3 CLEARED is the
+  number a backlog app exists to make you feel.
+- **GAMES / HOURS / SPAN** tiles.
+- **DIVERSITY, 0–100** — normalised Shannon entropy over the facet mix, not a category count:
+  nineteen shooters and one puzzle game is not a varied pile, and a count says it is.
+- **Bars for genre & mood, length, platform and release decade**, all from the same
+  `GameTaxonomy` facets as the filter chips — so every number on the screen can be reached by
+  tapping a chip on PILE.
+
+Drawn with layout (`Box` width fractions, a `Row` of weights), not a chart library: no extra
+dependency in a public repo, and it reads correctly to TalkBack as ordinary text.
 
 ---
 
@@ -183,12 +237,24 @@ DISCOVER also carries browsable rails:
 - **HIDDEN GEMS** — high rating, low review count
 - Genre rails
 
-### 2d. Clipboard nudge
+### 2d. Clipboard nudge — **built 2026-08-28**
 
-On foreground, if the clipboard holds text that plausibly names a game (short, no URL,
-matches IGDB with high confidence), show a dismissible chip: *"Add **Silksong** to your
-pile?"*. Opt-in via a first-run prompt, and permanently dismissible. Keep it quiet — this
-is a delight when it's right and an irritation when it's wrong, so bias toward silence.
+On foreground, if the clipboard holds text that plausibly names a game, show a dismissible
+banner offering to add it. Keep it quiet — this is a delight when it's right and an irritation
+when it's wrong, so bias toward silence.
+
+How "bias toward silence" is actually enforced (`ClipboardNudgeViewModel.isPlausibleGameName`,
+pinned by `ClipboardNudgeTest`): reject links (they belong to the share target, which resolves
+them properly), emails, handles, one-time codes and phone numbers, multi-line text, anything over
+60 characters or 8 words, and anything with no letters. Then require a match against the
+**on-device** IGDB name index at `CONFIDENT_ENOUGH` — no network call, so the nudge is instant
+and costs no Worker quota. A game already in the pile is swallowed silently. A dismissal is
+**persisted**, so "no" survives a relaunch.
+
+**Opt-in, off by default, and that is not only a preference.** From Android 12 the OS toasts
+*"CONTINUE? pasted from your clipboard"* whenever an app reads clipboard content it didn't write,
+so reading unprompted would put that toast on every app open. The setting's description in YOU
+says this outright rather than letting the toast be the user's first hint.
 
 *(Optional, low priority: barcode scan for physical cases via ML Kit.)*
 
@@ -377,7 +443,13 @@ single use, all free with Pro. Cosmetic-only monetization never damages the core
 
 ## 7. YOU — profile & stats
 
-- **HIGH SCORES** — the ranked all-time list, arcade leaderboard styling
+- **HIGH SCORES** — the ranked all-time list, arcade leaderboard styling. **EDIT** turns on
+  per-row move-up / move-down / drop controls: pairwise comparison is a good way to *enter* a
+  ranking and a poor way to correct one, and a mis-tap during the five questions used to be
+  permanent. A game dragged past a bucket boundary adopts the bucket it lands in, so the buckets
+  stay contiguous and later automatic placements stay correct. **Dropping a game from the
+  leaderboard leaves it exactly where it is in CLEARED** — it is not REMOVE FROM PILE, and the
+  confirmation says so.
 - **THIS YEAR** — games cleared, hours, longest game, fastest clear, current streak
 - **THE PILE** — the time-budget visualization
 - **TROPHIES** — arcade-style milestones: `FIRST CONTINUE` · `PILE SLAYER` (10 clears) ·

@@ -94,6 +94,11 @@ class RealBillingRepository @Inject constructor(
     override suspend fun earnCoins(amount: Int, reason: String): SpendResult =
         SpendResult.Success(coinLedger.earn(amount))
 
+    override suspend fun earnCoinsOnce(rewardKey: String, amount: Int, reason: String): Boolean =
+        coinLedger.earnOnce(rewardKey, amount) != null
+
+    override suspend fun markRewardClaimed(rewardKey: String) = coinLedger.markClaimed(rewardKey)
+
     override suspend fun currentOfferingPackage(): Package? =
         currentPackages().firstOrNull()
 

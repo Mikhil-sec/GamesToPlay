@@ -25,6 +25,30 @@ interface GameDao {
     suspend fun searchByName(query: String, limit: Int = 20): List<GameEntity>
 
     /**
+     * Games the user actually holds whose cached row predates [epochMillis] — the refresh
+     * queue for [com.mikhilnaika.continueapp.core.data.GameCacheRepository].
+     *
+     * Scoped to `pile_entries` on purpose. The `games` table also holds 426 bundled seed rows
+     * and everything DISCOVER has ever shown, none of which is worth spending a request on;
+     * only a game in someone's pile is one they'll actually look at. Seed ids are negative by
+     * construction and can never resolve against IGDB, so they're excluded here rather than
+     * being re-requested and re-failing every launch.
+     *
+     * Oldest first, so successive launches work through a long pile instead of retrying the
+     * same slice.
+     */
+    @Query(
+        """
+        SELECT g.id FROM games g
+        INNER JOIN pile_entries e ON e.gameId = g.id
+        WHERE g.id > 0 AND g.cachedAt < :epochMillis
+        ORDER BY g.cachedAt ASC
+        LIMIT :limit
+        """
+    )
+    suspend fun staleReferencedGameIds(epochMillis: Long, limit: Int): List<Long>
+
+    /**
      * Backfills key art for a game already in the pile.
      *
      * A targeted UPDATE rather than a REPLACE upsert on purpose: rows added before the Worker

@@ -70,6 +70,30 @@ class OfflineGameIndex @Inject constructor(
         return matchIn(index, rawText)
     }
 
+    /**
+     * The separators a typed query left out — `"spiderman"` -> `"spider man"`, or null when
+     * there's nothing to fix.
+     *
+     * A closed tester reported that searching *spiderman* and *spider-man* are different
+     * searches, and they are: IGDB tokenises on punctuation, so the joined spelling is one
+     * unknown token and matches almost nothing (4 results, led by a 1984 text adventure),
+     * while the separated one matches everything anyone means (20). The same is true of
+     * *streetfighter* (**zero** results) and *megaman* (twenty fan projects).
+     *
+     * The dictionary that fixes it is already on the device and already indexed by the exact
+     * key this needs. The index is keyed by *normalized* name — spaces kept, punctuation gone —
+     * so `"Spider-Man"` is stored as `"spider man"`, and squashing that key's spaces out gives
+     * back precisely what the user typed. No word list, no heuristic segmentation: the only
+     * respellings this can produce are real IGDB titles.
+     *
+     * @return a respelled query to search *in addition to* the original, or null.
+     */
+    suspend fun respell(query: String): String? {
+        val index = indexDeferred.await()
+        if (index.isEmpty()) return null
+        return respellIn(index, query)
+    }
+
     companion object {
         private const val ASSET_NAME = "game_index.tsv.gz"
 
@@ -146,6 +170,47 @@ class OfflineGameIndex @Inject constructor(
                 if (best >= GameNameCandidates.CONFIDENT_ENOUGH) break
             }
             return scored.values.sortedByDescending { it.confidence }.take(5)
+        }
+
+        /**
+         * Shortest typed query worth respelling.
+         *
+         * Below this a joined query is far more likely to be a genuine short title or a prefix
+         * the user is still typing ("tetris", "doom", "portal") than a missing space, and IGDB
+         * handles those perfectly well on its own.
+         */
+        private const val MIN_RESPELL_LENGTH = 6
+
+        /**
+         * The pure half of [respell], so it can run against the real shipped index from a
+         * plain JVM test.
+         *
+         * Only fires for a query with **no separator of its own**: if the user typed a space or
+         * a hyphen they have already told IGDB where the word boundaries are, and second-
+         * guessing that is how a good search gets worse. Ties break on `ratingCount`, so
+         * `"finalfantasy"` respells toward the title people mean rather than whichever
+         * obscure entry the hash happened to visit first.
+         */
+        internal fun respellIn(index: Map<String, List<OfflineGameRecord>>, query: String): String? {
+            val normalized = GameNameCandidates.normalize(query)
+            if (normalized.length < MIN_RESPELL_LENGTH) return null
+            if (normalized.contains(' ')) return null
+
+            var best: String? = null
+            var bestRating = -1
+            for ((key, records) in index) {
+                // Cheap reject before the allocation: a key can only squash to `normalized` if
+                // it is the same length plus however many spaces it carries.
+                if (key.length <= normalized.length || key.length > normalized.length + 6) continue
+                if (!key.contains(' ')) continue
+                if (key.replace(" ", "") != normalized) continue
+                val rating = records.firstOrNull()?.ratingCount ?: 0
+                if (rating > bestRating) {
+                    best = key
+                    bestRating = rating
+                }
+            }
+            return best
         }
 
         /**

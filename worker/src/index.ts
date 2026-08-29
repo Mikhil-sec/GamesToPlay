@@ -6,7 +6,16 @@ import { LiveTwitchAuthClient } from "./twitch/TwitchAuthClient.ts";
 import { resolveGame } from "./resolve/resolveGame.ts";
 import { getSteamOwnedGames } from "./routes/steamOwned.ts";
 import { spendCoins } from "./routes/coinsSpend.ts";
-import { checkRateLimits, readJsonBody, sanitizeQuery, sanitizeShareText } from "./security.ts";
+import {
+  checkRateLimits,
+  MAX_BATCH_IDS,
+  PAGE_SIZE,
+  readJsonBody,
+  sanitizeIds,
+  sanitizePage,
+  sanitizeQuery,
+  sanitizeShareText,
+} from "./security.ts";
 
 /**
  * No `Access-Control-Allow-Origin`, deliberately.
@@ -93,23 +102,53 @@ export default {
         return json({ results } satisfies SearchResponse);
       }
 
+      // Every rail takes `?page=0..2` — the "SHOW MORE" button. The page number is part of
+      // the cache key, so page 0 stays exactly as cheap as it was.
       if (url.pathname === "/games/trending" && request.method === "GET") {
-        const results = await cached(env, "trending", CacheTtl.TRENDING, () => provider.trending());
+        const p = sanitizePage(url.searchParams.get("page"));
+        const results = await cached(env, `trending:p${p}`, CacheTtl.TRENDING, () =>
+          provider.trending(p * PAGE_SIZE),
+        );
         return json({ results } satisfies SearchResponse);
       }
 
       if (url.pathname === "/games/short" && request.method === "GET") {
-        const results = await cached(env, "short", CacheTtl.SHORT, () => provider.shortAndSweet());
+        const p = sanitizePage(url.searchParams.get("page"));
+        const results = await cached(env, `short:p${p}`, CacheTtl.SHORT, () =>
+          provider.shortAndSweet(p * PAGE_SIZE),
+        );
         return json({ results } satisfies SearchResponse);
       }
 
       if (url.pathname === "/games/new" && request.method === "GET") {
-        const results = await cached(env, "new", CacheTtl.NEW_RELEASES, () => provider.newReleases());
+        const p = sanitizePage(url.searchParams.get("page"));
+        const results = await cached(env, `new:p${p}`, CacheTtl.NEW_RELEASES, () =>
+          provider.newReleases(p * PAGE_SIZE),
+        );
         return json({ results } satisfies SearchResponse);
       }
 
       if (url.pathname === "/games/gems" && request.method === "GET") {
-        const results = await cached(env, "gems", CacheTtl.HIDDEN_GEMS, () => provider.hiddenGems());
+        const p = sanitizePage(url.searchParams.get("page"));
+        const results = await cached(env, `gems:p${p}`, CacheTtl.HIDDEN_GEMS, () =>
+          provider.hiddenGems(p * PAGE_SIZE),
+        );
+        return json({ results } satisfies SearchResponse);
+      }
+
+      /**
+       * Refresh many already-known games at once.
+       *
+       * Deliberately **not** cached in KV. The app calls this with whatever ids happen to be in
+       * one user's pile, so the key would be user-shaped and every distinct pile would burn a
+       * write out of the 1,000/day budget — the exact failure mode the genre route is written
+       * to avoid. Uncached it costs two IGDB requests and zero writes, and the app only calls
+       * it when it actually holds stale rows.
+       */
+      if (url.pathname === "/games/batch" && request.method === "GET") {
+        const ids = sanitizeIds(url.searchParams.get("ids"), MAX_BATCH_IDS);
+        if (ids.length === 0) return json({ results: [] } satisfies SearchResponse);
+        const results = await provider.byIds(ids);
         return json({ results } satisfies SearchResponse);
       }
 
@@ -129,7 +168,10 @@ export default {
         const table = await cached<GenreRef[]>(env, "genres", CacheTtl.GENRES, () => provider.genres());
         const match = table.find((g) => g.name.toLowerCase() === name.toLowerCase());
         if (!match) return json({ results: [] } satisfies SearchResponse);
-        const results = await cached(env, `genre:${match.id}`, CacheTtl.GENRE, () => provider.byGenre(match.id));
+        const p = sanitizePage(url.searchParams.get("page"));
+        const results = await cached(env, `genre:${match.id}:p${p}`, CacheTtl.GENRE, () =>
+          provider.byGenre(match.id, p * PAGE_SIZE),
+        );
         return json({ results } satisfies SearchResponse);
       }
 

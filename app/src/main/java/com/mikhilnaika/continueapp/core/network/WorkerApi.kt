@@ -20,17 +20,33 @@ interface WorkerApi {
     @GET("games/search")
     suspend fun searchGames(@Query("q") query: String): SearchResponse
 
+    // Every rail takes a page — what "SHOW MORE" spends. The Worker clamps it and keys its
+    // cache on it, so page 0 stays exactly as cheap as it always was. No Kotlin default value
+    // on any parameter here: a default on a Retrofit interface method makes the compiler emit a
+    // synthetic bridge that the dynamic proxy has no business meeting. Defaults belong on
+    // [GameDataSource], which is an ordinary interface.
     @GET("games/trending")
-    suspend fun trending(): SearchResponse
+    suspend fun trending(@Query("page") page: Int): SearchResponse
 
     @GET("games/short")
-    suspend fun shortAndSweet(): SearchResponse
+    suspend fun shortAndSweet(@Query("page") page: Int): SearchResponse
 
     @GET("games/new")
-    suspend fun newReleases(): SearchResponse
+    suspend fun newReleases(@Query("page") page: Int): SearchResponse
 
     @GET("games/gems")
-    suspend fun hiddenGems(): SearchResponse
+    suspend fun hiddenGems(@Query("page") page: Int): SearchResponse
+
+    /**
+     * Refresh many already-known games in one round trip.
+     *
+     * Exists so that re-reading a whole pile costs one request rather than one per game — see
+     * [GameDataSource.byIds]. The Worker deliberately doesn't cache this in KV (the id set is
+     * user-shaped, so a cache key would burn the 1,000 writes/day budget), which is also why
+     * the app only calls it when it genuinely holds stale rows.
+     */
+    @GET("games/batch")
+    suspend fun gamesBatch(@Query("ids") ids: String): SearchResponse
 
     /**
      * Genre rail, addressed by IGDB's own genre *name* — the app already holds those strings on
@@ -38,7 +54,7 @@ interface WorkerApi {
      * name against a cached genre table and only ever caches by the resolved id.
      */
     @GET("games/genre")
-    suspend fun byGenre(@Query("name") name: String): SearchResponse
+    suspend fun byGenre(@Query("name") name: String, @Query("page") page: Int): SearchResponse
 
     @GET("games/{id}")
     suspend fun gameDetail(@Path("id") id: Long): GameDto

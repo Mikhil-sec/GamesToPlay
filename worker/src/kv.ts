@@ -12,11 +12,15 @@ import type { Env } from "./types.ts";
  * v2 → v3 (2026-08-14): `backgroundUrl` populated from screenshots/artworks (was always null,
  *   which left the Credits Roll upscaling a 264px cover to full screen).
  *
+ * v4 -> v5 (2026-08-28): `tags` now carries IGDB **game modes** as well as themes, so every
+ *   cached DTO was missing "Multiplayer"/"Co-operative" — a shape change, hence a bump. The
+ *   rail keys also gained a `:p{page}` suffix in the same deploy.
+ *
  * Note the 2026-08-19 rails (new releases, hidden gems, genre) deliberately did **not** bump
  * this: they only add new keys, and no existing query changed shape. Bumping would have cold-
  * started every cache while the closed test was live, for nothing.
  */
-const CACHE_VERSION = "v4";
+const CACHE_VERSION = "v5";
 
 /** Cache-aside helper — IGDB allows only 4 req/sec, so caching is what survives a judging spike. */
 export async function cached<T>(

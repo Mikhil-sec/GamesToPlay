@@ -39,6 +39,19 @@ class FakeBillingRepository @Inject constructor() : BillingRepository {
         return SpendResult.Success(coinBalance.value)
     }
 
+    /** In-memory mirror of the real ledger's claimed-reward set, so debug builds behave the same. */
+    private val claimedRewards = mutableSetOf<String>()
+
+    override suspend fun earnCoinsOnce(rewardKey: String, amount: Int, reason: String): Boolean {
+        if (!claimedRewards.add(rewardKey)) return false
+        coinBalance.value += amount
+        return true
+    }
+
+    override suspend fun markRewardClaimed(rewardKey: String) {
+        claimedRewards.add(rewardKey)
+    }
+
     /** Still null: faking a `Package` the RevenueCat SDK never issued would be a lie the
      *  purchase call can't honour. [proTiers] is the honest way to make the paywall demoable. */
     override suspend fun currentOfferingPackage(): Package? = null

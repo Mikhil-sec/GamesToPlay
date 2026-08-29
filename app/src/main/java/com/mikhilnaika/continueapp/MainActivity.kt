@@ -5,12 +5,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.mikhilnaika.continueapp.core.data.UserPreferencesRepository
 import com.mikhilnaika.continueapp.core.design.ContinueTheme
+import com.mikhilnaika.continueapp.core.ui.LocalHaptics
+import com.mikhilnaika.continueapp.core.util.Haptics
 import com.mikhilnaika.continueapp.navigation.ContinueNavHost
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,6 +43,13 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 
+    /**
+     * Injected rather than constructed per screen, so the HAPTICS setting in YOU actually
+     * reaches the vibrator — see [Haptics] for what was wrong before.
+     */
+    @Inject
+    lateinit var haptics: Haptics
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -48,7 +58,9 @@ class MainActivity : ComponentActivity() {
             val onboardingComplete by viewModel.onboardingComplete.collectAsStateWithLifecycle()
             onboardingComplete?.let { complete ->
                 ContinueTheme {
-                    ContinueNavHost(onboardingComplete = complete)
+                    CompositionLocalProvider(LocalHaptics provides haptics) {
+                        ContinueNavHost(onboardingComplete = complete)
+                    }
                 }
             }
         }

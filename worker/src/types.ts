@@ -29,6 +29,14 @@ export interface GameDto {
   playtimeHoursNormally: number | null;
   playtimeHoursCompletely: number | null;
   genres: string[];
+  /**
+   * IGDB **themes plus game modes**, in that order — "Horror", "Stealth", "Multiplayer",
+   * "Co-operative". `game_modes` was being requested from IGDB and then thrown away, which is
+   * why nothing in the app could ever tell a multiplayer game from a single-player one (and
+   * why `MoodMapper`'s CHAOS rule, which looks for "multiplayer" in exactly this list, had
+   * never once matched). Folded into `tags` rather than added as a fourth array so the app's
+   * Room schema doesn't need a migration to carry it.
+   */
   tags: string[];
   platforms: string[];
 }
@@ -74,17 +82,28 @@ export interface SteamOwnedResponse {
 export interface GameProvider {
   search(query: string): Promise<GameDto[]>;
   detail(id: number): Promise<GameDto | null>;
-  trending(): Promise<GameDto[]>;
-  shortAndSweet(): Promise<GameDto[]>;
-  newReleases(): Promise<GameDto[]>;
-  hiddenGems(): Promise<GameDto[]>;
+  /**
+   * Several games by id in one round trip — what the app's cache refresh uses so a 40-game
+   * pile costs one request rather than forty. Order and completeness are not guaranteed:
+   * unknown ids are simply absent from the result.
+   */
+  byIds(ids: number[]): Promise<GameDto[]>;
+  /**
+   * The browsable rails. [offset] is what "SHOW MORE" spends — every rail returns 20 at a
+   * time, and the route caps how deep a client may page (see PAGE_SIZE/MAX_PAGE in index.ts)
+   * so paging can never mint unbounded KV keys.
+   */
+  trending(offset?: number): Promise<GameDto[]>;
+  shortAndSweet(offset?: number): Promise<GameDto[]>;
+  newReleases(offset?: number): Promise<GameDto[]>;
+  hiddenGems(offset?: number): Promise<GameDto[]>;
   /**
    * The genre table, so a caller can turn a genre *name* into an id. Kept separate from
    * [byGenre] on purpose: the route caches this whole table under one key and resolves names
    * in memory, which is what stops arbitrary client strings from minting unbounded KV keys.
    */
   genres(): Promise<GenreRef[]>;
-  byGenre(genreId: number): Promise<GameDto[]>;
+  byGenre(genreId: number, offset?: number): Promise<GameDto[]>;
 }
 
 export interface GenreRef {

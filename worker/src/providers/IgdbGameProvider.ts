@@ -109,7 +109,13 @@ function toDto(game: IgdbGame, ttb?: IgdbTimeToBeat): GameDto {
     playtimeHoursNormally: secondsToHours(ttb?.normally),
     playtimeHoursCompletely: secondsToHours(ttb?.completely),
     genres: (game.genres ?? []).map((g) => g.name),
-    tags: (game.themes ?? []).map((t) => t.name),
+    // Themes *and* game modes. `game_modes.name` has been in GAME_FIELDS from the start and
+    // was then silently dropped on the floor here, so "Multiplayer"/"Co-operative" reached
+    // nothing downstream — see the `tags` doc comment in ../types.ts.
+    tags: [
+      ...(game.themes ?? []).map((t) => t.name),
+      ...(game.game_modes ?? []).map((m) => m.name),
+    ],
     platforms: (game.platforms ?? []).map((p) => p.name),
   };
 }
@@ -179,19 +185,37 @@ export class IgdbGameProvider implements GameProvider {
   }
 
   /**
+   * Many games in one round trip, for the app's cache refresh.
+   *
+   * The whole reason this exists rather than N calls to [detail]: a pile of 40 games would be
+   * 40 requests against a 4 req/sec ceiling *and* 40 KV writes against a 1,000/day budget.
+   * This is two IGDB requests and — because the route deliberately doesn't cache it — zero KV
+   * writes. Ids are numbers by the time they reach here (the route parses them), so they can't
+   * carry apicalypse syntax into the query.
+   */
+  async byIds(ids: number[]): Promise<GameDto[]> {
+    if (ids.length === 0) return [];
+    const games = await this.query<IgdbGame>(
+      "games",
+      `fields ${GAME_FIELDS}; where id = (${ids.join(",")}); limit ${ids.length};`,
+    );
+    return this.withPlaytimes(games);
+  }
+
+  /**
    * "Trending" for a *backlog* app means games people are actually playing and rating right
    * now — not IGDB's `hypes`, which counts pre-release follows and therefore surfaces
    * unreleased games you can't add to a pile. Scoped to the last ~3 years and ordered by
    * how many people have rated it.
    */
-  async trending(): Promise<GameDto[]> {
+  async trending(offset = 0): Promise<GameDto[]> {
     const threeYearsAgo = Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 365 * 3;
     const now = Math.floor(Date.now() / 1000);
     const games = await this.query<IgdbGame>(
       "games",
       `fields ${GAME_FIELDS}; where ${MAIN_GAMES_ONLY} & cover != null & ` +
         `first_release_date > ${threeYearsAgo} & first_release_date < ${now} & ` +
-        `total_rating_count > 5; sort total_rating_count desc; limit 20;`,
+        `total_rating_count > 5; sort total_rating_count desc; limit 20; offset ${offset};`,
     );
     return this.withPlaytimes(games);
   }
@@ -202,13 +226,13 @@ export class IgdbGameProvider implements GameProvider {
    * before and it wasn't remotely the same thing). Two requests, not N — pick the short games
    * first, then hydrate them.
    */
-  async shortAndSweet(): Promise<GameDto[]> {
+  async shortAndSweet(offset = 0): Promise<GameDto[]> {
     const EIGHT_HOURS_SECONDS = 8 * 3600;
     const times = await this.query<IgdbTimeToBeat>(
       "game_time_to_beats",
       `fields game_id, hastily, normally, completely; ` +
         `where normally > 0 & normally < ${EIGHT_HOURS_SECONDS} & count > 5; ` +
-        `sort count desc; limit 60;`,
+        `sort count desc; limit 60; offset ${offset * 3};`,
     );
     if (times.length === 0) return [];
 
@@ -234,14 +258,15 @@ export class IgdbGameProvider implements GameProvider {
    * `game_status`, not the deprecated `status`; see the GAME_TYPE_MAIN_GAME comment above for
    * why filtering on a dead IGDB field fails silently rather than loudly.)
    */
-  async newReleases(): Promise<GameDto[]> {
+  async newReleases(offset = 0): Promise<GameDto[]> {
     const now = Math.floor(Date.now() / 1000);
     const sixMonthsAgo = now - 60 * 60 * 24 * 180;
     const games = await this.query<IgdbGame>(
       "games",
       `fields ${GAME_FIELDS}; where ${MAIN_GAMES_ONLY} & cover != null & ` +
         `first_release_date > ${sixMonthsAgo} & first_release_date < ${now} & ` +
-        `total_rating_count > 3 & game_status = null; sort total_rating_count desc; limit 20;`,
+        `total_rating_count > 3 & game_status = null; sort total_rating_count desc; limit 20; ` +
+        `offset ${offset};`,
     );
     return this.withPlaytimes(games);
   }
@@ -255,12 +280,12 @@ export class IgdbGameProvider implements GameProvider {
    * which nothing brigades, and requiring several outlets filters the rest. Capping
    * `total_rating_count` is then what makes it *hidden* rather than merely good.
    */
-  async hiddenGems(): Promise<GameDto[]> {
+  async hiddenGems(offset = 0): Promise<GameDto[]> {
     const games = await this.query<IgdbGame>(
       "games",
       `fields ${GAME_FIELDS}; where ${MAIN_GAMES_ONLY} & cover != null & ` +
         `aggregated_rating > 82 & aggregated_rating_count >= 5 & total_rating_count < 200; ` +
-        `sort aggregated_rating desc; limit 20;`,
+        `sort aggregated_rating desc; limit 20; offset ${offset};`,
     );
     return this.withPlaytimes(games);
   }
@@ -269,11 +294,12 @@ export class IgdbGameProvider implements GameProvider {
     return this.query<GenreRef>("genres", "fields id, name; limit 50; sort id asc;");
   }
 
-  async byGenre(genreId: number): Promise<GameDto[]> {
+  async byGenre(genreId: number, offset = 0): Promise<GameDto[]> {
     const games = await this.query<IgdbGame>(
       "games",
       `fields ${GAME_FIELDS}; where ${MAIN_GAMES_ONLY} & cover != null & ` +
-        `genres = (${genreId}) & total_rating_count > 10; sort total_rating_count desc; limit 20;`,
+        `genres = (${genreId}) & total_rating_count > 10; sort total_rating_count desc; ` +
+        `limit 20; offset ${offset};`,
     );
     return this.withPlaytimes(games);
   }

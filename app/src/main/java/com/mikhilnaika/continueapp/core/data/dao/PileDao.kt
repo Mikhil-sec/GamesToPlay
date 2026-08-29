@@ -25,7 +25,22 @@ data class PileEntryWithGame(
     val playtimeHoursNormally: Int?,
     val playtimeHoursCompletely: Int?,
     val genresJson: String,
+    /**
+     * IGDB themes **and** game modes — see the Worker's `toDto`. Projected alongside
+     * `genresJson` because [com.mikhilnaika.continueapp.core.util.GameTaxonomy] needs both to
+     * answer "is this a horror game / a multiplayer game", and neither list can do it alone.
+     */
+    val tagsJson: String,
     val platformsJson: String,
+    /**
+     * Added purely so PILE's own sort options could stop lying. `PileSort.RATING` was
+     * documented in the enum, offered nowhere, and implemented as `entries` — the identity
+     * function — with the comment "rating not denormalized onto PileEntryWithGame yet";
+     * `RELEASE_DATE` silently sorted by date *added*. Both are columns on `games` that this
+     * query was already joined against.
+     */
+    val rating: Float?,
+    val released: String?,
 )
 
 /** Everything [com.mikhilnaika.continueapp.feature.draw.DrawSelector] needs to score a candidate. */
@@ -54,7 +69,8 @@ interface PileDao {
         SELECT e.entryId, e.gameId, e.state, e.addedAt, e.startedAt, e.finishedAt,
                e.ownedPlatform, e.hoursPlayed,
                g.name, g.coverUrl, g.playtimeHoursHastily, g.playtimeHoursNormally,
-               g.playtimeHoursCompletely, g.genresJson, g.platformsJson
+               g.playtimeHoursCompletely, g.genresJson, g.tagsJson, g.platformsJson,
+               g.rating, g.released
         FROM pile_entries e
         INNER JOIN games g ON g.id = e.gameId
         WHERE e.state = :state
@@ -68,7 +84,8 @@ interface PileDao {
         SELECT e.entryId, e.gameId, e.state, e.addedAt, e.startedAt, e.finishedAt,
                e.ownedPlatform, e.hoursPlayed,
                g.name, g.coverUrl, g.playtimeHoursHastily, g.playtimeHoursNormally,
-               g.playtimeHoursCompletely, g.genresJson, g.platformsJson
+               g.playtimeHoursCompletely, g.genresJson, g.tagsJson, g.platformsJson,
+               g.rating, g.released
         FROM pile_entries e
         INNER JOIN games g ON g.id = e.gameId
         WHERE e.state = :state
@@ -82,7 +99,8 @@ interface PileDao {
         SELECT e.entryId, e.gameId, e.state, e.addedAt, e.startedAt, e.finishedAt,
                e.ownedPlatform, e.hoursPlayed,
                g.name, g.coverUrl, g.playtimeHoursHastily, g.playtimeHoursNormally,
-               g.playtimeHoursCompletely, g.genresJson, g.platformsJson
+               g.playtimeHoursCompletely, g.genresJson, g.tagsJson, g.platformsJson,
+               g.rating, g.released
         FROM pile_entries e
         INNER JOIN games g ON g.id = e.gameId
         ORDER BY e.addedAt DESC

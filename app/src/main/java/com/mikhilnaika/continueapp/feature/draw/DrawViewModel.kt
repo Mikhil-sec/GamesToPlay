@@ -14,6 +14,9 @@ import com.mikhilnaika.continueapp.core.data.TimeBudget
 import com.mikhilnaika.continueapp.core.data.dao.DrawDao
 import com.mikhilnaika.continueapp.core.data.dao.PileDao
 import com.mikhilnaika.continueapp.core.data.entity.DrawEntity
+import com.mikhilnaika.continueapp.core.util.GameFacet
+import com.mikhilnaika.continueapp.core.util.facets
+import com.mikhilnaika.continueapp.core.util.platforms
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,17 +54,32 @@ class DrawViewModel @Inject constructor(
         viewModelScope.launch {
             billingRepository.coinBalance.collect { balance -> _state.update { it.copy(coinBalance = balance) } }
         }
-        loadAvailablePlatforms()
+        loadDials()
     }
 
-    private fun loadAvailablePlatforms() {
+    /**
+     * Fills the PLATFORM and GENRE dials from the games actually in the BACKLOG.
+     *
+     * Both are derived from the candidate pool rather than from a fixed list, so a dial can
+     * never offer a setting that would return nothing. GENRE uses the same
+     * [com.mikhilnaika.continueapp.core.util.GameTaxonomy] facets as PILE's filter chips —
+     * closed testing reported the two as inconsistent, and they were: DRAW had no genre dial at
+     * all, so the two screens narrowed the same pile by different things.
+     */
+    private fun loadDials() {
         viewModelScope.launch {
             val candidates = pileDao.getDrawCandidates()
-            val platforms = candidates
-                .flatMap { runCatching { json.decodeFromString<List<String>>(it.platformsJson) }.getOrDefault(emptyList()) }
-                .distinct()
-                .sorted()
-            _state.update { it.copy(availablePlatforms = platforms) }
+            val platforms = candidates.flatMap { it.platforms }.distinct().sorted()
+            val present = candidates.flatMapTo(mutableSetOf()) { it.facets }
+            _state.update {
+                it.copy(
+                    availablePlatforms = platforms,
+                    availableFacets = GameFacet.entries.filter { facet -> facet in present },
+                    // A dial that no longer offers a setting must not keep filtering by it.
+                    selectedFacets = it.selectedFacets.intersect(present),
+                    selectedPlatforms = it.selectedPlatforms.intersect(platforms.toSet()),
+                )
+            }
         }
     }
 
@@ -70,6 +88,11 @@ class DrawViewModel @Inject constructor(
     fun togglePlatform(platform: String) = _state.update {
         val next = if (platform in it.selectedPlatforms) it.selectedPlatforms - platform else it.selectedPlatforms + platform
         it.copy(selectedPlatforms = next)
+    }
+
+    fun toggleFacet(facet: GameFacet) = _state.update {
+        val next = if (facet in it.selectedFacets) it.selectedFacets - facet else it.selectedFacets + facet
+        it.copy(selectedFacets = next)
     }
 
     /** The lever release — docs/02-PRODUCT-SPEC.md §3. Gated by the daily free-draw limit. */
@@ -177,6 +200,7 @@ class DrawViewModel @Inject constructor(
             timeBudget = _state.value.timeBudget,
             mood = _state.value.mood,
             platforms = _state.value.selectedPlatforms,
+            facets = _state.value.selectedFacets,
         )
         val now = System.currentTimeMillis()
         drawDao.insert(
@@ -248,7 +272,7 @@ class DrawViewModel @Inject constructor(
                 lastVerdict = null,
             )
         }
-        loadAvailablePlatforms()
+        loadDials()
     }
 
     private fun startOfTodayMillis(): Long {

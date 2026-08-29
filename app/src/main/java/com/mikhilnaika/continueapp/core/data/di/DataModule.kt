@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import com.mikhilnaika.continueapp.core.data.AppDatabase
+import com.mikhilnaika.continueapp.core.data.AppMigrations
 import com.mikhilnaika.continueapp.core.data.SeedLoader
 import com.mikhilnaika.continueapp.core.data.UserPreferencesRepository
 import com.mikhilnaika.continueapp.core.data.dao.DrawDao
@@ -40,6 +41,11 @@ object DataModule {
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.DATABASE_NAME)
+            // Empty today, and that is the point: the call site exists, so adding a migration is
+            // a one-line edit to `AppMigrations.ALL` rather than a thing to remember to wire up
+            // in a hurry. Note there is deliberately **no** `fallbackToDestructiveMigration()` —
+            // see the ban and the reasoning in DatabaseSchema.
+            .addMigrations(*AppMigrations.ALL)
             .build()
 
     @Provides

@@ -204,6 +204,29 @@ This directly improves two features:
 Not every game has this data; fall back to a genre-based median estimate and mark it as an
 estimate in the UI.
 
+### `tags` carries themes **and** game modes
+
+The DTO has three arrays where IGDB has four fields: `genres`, `tags` and `platforms`.
+`tags` is **themes concatenated with game modes** — "Horror", "Stealth", "Open world",
+"Multiplayer", "Co-operative", "Single player" — folded together rather than added as a fourth
+array so the app's Room schema needs no migration to carry them.
+
+**`game_modes` was in `GAME_FIELDS` from day one and then dropped on the floor in `toDto`.**
+Nothing downstream could ever tell a multiplayer game from a single-player one, and
+`MoodMapper`'s CHAOS rule — which looks for "multiplayer" in exactly this list — had never once
+matched. Fixed 2026-08-28, with `CACHE_VERSION` bumped to `v5` because it is a shape change,
+and a client-side `GameCacheRepository.CACHE_EPOCH_MILLIS` so already-cached rows on real
+devices get refreshed rather than staying on the old shape forever.
+
+### Facets — the app's own vocabulary (`GameTaxonomy`)
+
+IGDB's raw genre strings are not a filter vocabulary a person would recognise: there is no
+"horror" (a *theme*), no "FPS" ("Shooter"), and no "multiplayer" (a *game mode*). PILE's chips,
+DRAW's GENRE dial and the STATS bars all read `GameTaxonomy.facetsFor(genres, tags)` instead,
+which matches across all three IGDB fields at once. One vocabulary is the point — closed testing
+reported the filters as inconsistent between screens, and they were, because each screen had
+invented its own.
+
 ### Mood mapping (revised for IGDB's taxonomy)
 
 IGDB has `genres`, `themes`, **and** `game_modes` — a richer signal than RAWG's tags.

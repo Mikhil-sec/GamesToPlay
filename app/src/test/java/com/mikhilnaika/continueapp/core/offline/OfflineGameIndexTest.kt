@@ -3,6 +3,7 @@ package com.mikhilnaika.continueapp.core.offline
 import com.mikhilnaika.continueapp.core.util.GameNameCandidates
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -156,5 +157,49 @@ class OfflineGameIndexTest {
         val coverImageId = withCover!!.coverImageId!!
         assertTrue("coverImageId should be a bare id, not a URL: $coverImageId", !coverImageId.contains("http"))
         assertTrue("IGDB cover image ids start with 'co': $coverImageId", coverImageId.startsWith("co"))
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Query respelling — the "spiderman vs spider-man" report. Run against the real index for
+    // the same reason as everything else in this file: the whole feature is a claim about what
+    // is actually in the shipped asset, and a fixture would only test the loop.
+    // ---------------------------------------------------------------------------------------
+
+    @Test
+    fun `a joined query is respelled into the separators the user left out`() {
+        val index = loadRealIndex()
+        assertEquals("spider man", OfflineGameIndex.respellIn(index, "spiderman"))
+        assertEquals("street fighter", OfflineGameIndex.respellIn(index, "streetfighter"))
+        assertEquals("mega man", OfflineGameIndex.respellIn(index, "megaman"))
+    }
+
+    @Test
+    fun `a query that already has its separators is left alone`() {
+        val index = loadRealIndex()
+        // The user has already told IGDB where the word boundaries are; second-guessing that is
+        // how a working search gets worse.
+        assertNull(OfflineGameIndex.respellIn(index, "spider man"))
+        assertNull(OfflineGameIndex.respellIn(index, "elden ring"))
+    }
+
+    @Test
+    fun `a real one-word title is never respelled`() {
+        val index = loadRealIndex()
+        // "Blasphemous" is a game. Splitting it would search for something nobody typed.
+        assertNull(OfflineGameIndex.respellIn(index, "blasphemous"))
+        assertNull(OfflineGameIndex.respellIn(index, "hades"))
+    }
+
+    @Test
+    fun `short queries are left alone — they are prefixes being typed, not missing spaces`() {
+        val index = loadRealIndex()
+        assertNull(OfflineGameIndex.respellIn(index, "doom"))
+        assertNull(OfflineGameIndex.respellIn(index, "spid"))
+    }
+
+    @Test
+    fun `nonsense respells to nothing rather than to the nearest thing`() {
+        val index = loadRealIndex()
+        assertNull(OfflineGameIndex.respellIn(index, "qwertyuiopasdf"))
     }
 }

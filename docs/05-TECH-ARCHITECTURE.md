@@ -55,6 +55,16 @@ app/src/main/java/com/<you>/continueapp/
 
 ## Data model (Room)
 
+**Schema versioning lives in `core/data/DatabaseSchema.kt`, not in the `@Database` annotation.**
+Room throws `IllegalStateException` on launch when a device's stored database version is older
+than the code's and no `Migration` covers the gap — and that only happens on an *upgrade*, so a
+fresh install hides it completely and the crash reaches 100% of existing users at once. Keeping
+`VERSION` and `AppMigrations.ALL` in one file lets `AppMigrationsTest` fail the build when they
+drift, which is the only place the mistake can be caught before an APK exists.
+
+`fallbackToDestructiveMigration()` is **banned**: it resolves the crash by deleting the user's
+pile, which is the one thing in this app that cannot be re-fetched.
+
 ```kotlin
 @Entity(tableName = "games")
 data class GameEntity(
@@ -157,12 +167,30 @@ A single free-tier Worker covers all three. TypeScript, deployed with Wrangler, 
 |---|---|---|
 | `GET` | `/games/search?q=` | Proxy IGDB search; cache 24h in KV |
 | `GET` | `/games/:id` | Proxy IGDB detail; cache 7d |
-| `GET` | `/games/trending` | Curated rails; cache 6h |
-| `GET` | `/games/short` | Highly-rated under 8h; cache 24h |
+| `GET` | `/games/trending?page=` | Curated rails; cache 6h, per page |
+| `GET` | `/games/short?page=` | Genuinely under 8h (from `game_time_to_beats`); cache 24h |
+| `GET` | `/games/new?page=` | Notable releases of the last 6 months; cache 12h |
+| `GET` | `/games/gems?page=` | Critic-scored and under-played; cache 3d |
+| `GET` | `/games/genre?name=&page=` | One genre, resolved by name against a cached genre table |
+| `GET` | `/games/batch?ids=` | Refresh up to 50 already-known games in one request. **Uncached, deliberately** — see below |
 | `POST` | `/resolve` | **Share-target brain.** Takes raw shared text and/or a URL → returns ranked IGDB candidates |
 | `GET` | `/steam/owned?vanity=` | Steam `GetOwnedGames` + IGDB matching |
 | `POST` | `/coins/spend` | Validate + call RevenueCat to debit coins |
 | `GET` | `/health` | Uptime |
+
+**Paging (`?page=0..2`)** is what DISCOVER's SHOW MORE spends. It is safe to expose because a
+rail's contents don't depend on who is asking: page 2 of TRENDING is **one** KV entry shared by
+every user of the app, not one per user. The page number is clamped in `security.ts`
+(`sanitizePage`) — an uncapped `page` would let a script mint unbounded keys against the
+1,000 writes/day budget that `docs/12-SECURITY.md` calls the tightest limit in the stack.
+
+**`/games/batch` is the one read endpoint with no KV cache**, and that is the point. The app
+calls it with whatever ids happen to be in *one user's* pile, so a cache key would be
+user-shaped and every distinct pile would burn a write. Uncached it costs two IGDB requests and
+zero writes, and the app only calls it when it actually holds stale rows (see
+`GameCacheRepository`). Ids are parsed to `Number` before the query is built, which is what
+keeps client input out of apicalypse syntax; malformed ids are dropped rather than failing the
+request.
 
 ### `/resolve` — the two-stage share pipeline
 

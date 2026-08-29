@@ -25,7 +25,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -34,7 +33,7 @@ import com.mikhilnaika.continueapp.core.design.ContinueColors
 import com.mikhilnaika.continueapp.core.design.ContinueSpacing
 import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
 import com.mikhilnaika.continueapp.core.ui.ArcadeButton
-import com.mikhilnaika.continueapp.core.util.Haptics
+import com.mikhilnaika.continueapp.core.ui.LocalHaptics
 import com.mikhilnaika.continueapp.core.util.IgdbImage
 import kotlinx.coroutines.delay
 
@@ -47,7 +46,7 @@ private const val STEP_RANK_BUTTON = 4
 /**
  * The completion ritual — docs/02-PRODUCT-SPEC.md §4 "Credits Roll". Not a checkbox: a
  * ~7-second, skippable cinematic. "Completion should pay" — see [CreditsRollViewModel] for
- * the +5 coin grant.
+ * the coin grant, which is paid once per game rather than once per clear.
  */
 @Composable
 fun CreditsRollScreen(
@@ -57,8 +56,7 @@ fun CreditsRollScreen(
     viewModel: CreditsRollViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
-    val context = LocalContext.current
-    val haptics = remember { Haptics(context) }
+    val haptics = LocalHaptics.current
     var step by remember { mutableIntStateOf(STEP_FLASH) }
     var skipped by remember { mutableStateOf(false) }
 
@@ -139,11 +137,22 @@ fun CreditsRollScreen(
                 }
                 if (step >= STEP_COINS) {
                     androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = ContinueSpacing.LG.dp))
-                    Text(
-                        text = "+5 COINS",
-                        style = ContinueTextStyles.monoL,
-                        color = ContinueColors.AccentCoin,
-                    )
+                    // Not a hardcoded "+5 COINS" any more: a game only pays once, so a replay
+                    // reaches this beat having earned nothing and the cinematic has to be
+                    // honest about that rather than promising coins the balance won't show.
+                    if (state.coinsAwarded > 0) {
+                        Text(
+                            text = "+${state.coinsAwarded} COINS",
+                            style = ContinueTextStyles.monoL,
+                            color = ContinueColors.AccentCoin,
+                        )
+                    } else {
+                        Text(
+                            text = "ALREADY PAID FOR THIS ONE",
+                            style = ContinueTextStyles.label,
+                            color = ContinueColors.TextTertiary,
+                        )
+                    }
                 }
                 if (step >= STEP_RANK_BUTTON) {
                     androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = ContinueSpacing.XL.dp))

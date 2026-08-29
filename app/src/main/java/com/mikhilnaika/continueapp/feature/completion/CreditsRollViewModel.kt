@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mikhilnaika.continueapp.core.billing.BillingRepository
 import com.mikhilnaika.continueapp.core.data.PileState
+import com.mikhilnaika.continueapp.core.data.clearRewardKey
 import com.mikhilnaika.continueapp.core.data.dao.GameDao
 import com.mikhilnaika.continueapp.core.data.dao.PileDao
 import com.mikhilnaika.continueapp.core.network.GameDataSource
@@ -21,7 +22,7 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 /** docs/02-PRODUCT-SPEC.md §4 — awarded on completion, "completion should pay". */
-private const val COMPLETION_COIN_REWARD = 5
+const val COMPLETION_COIN_REWARD = 5
 
 data class CreditsRollUiState(
     val isLoading: Boolean = true,
@@ -33,6 +34,14 @@ data class CreditsRollUiState(
     val finishedLabel: String = "",
     val clearOrdinal: Int = 1,
     val clearYear: Int = Calendar.getInstance().get(Calendar.YEAR),
+    /**
+     * Coins this clear actually paid — 0 when the game has already been paid for once.
+     *
+     * The screen prints this rather than a hardcoded "+5 COINS", because it is now possible for
+     * a clear to pay nothing and the cinematic must not claim otherwise. See the reward-key
+     * comment on [CreditsRollViewModel].
+     */
+    val coinsAwarded: Int = 0,
 )
 
 @HiltViewModel
@@ -55,6 +64,14 @@ class CreditsRollViewModel @Inject constructor(
             val game = gameDao.get(entry.gameId)
             val now = System.currentTimeMillis()
 
+            // The coin grant is keyed on the *game*, not on this transition.
+            //
+            // A closed tester found the loop: clear a game, move it back to THE PILE, clear it
+            // again, +5 every time, forever. The guard below only ever stopped the *same*
+            // Credits Roll paying twice, which was never the problem. Keying the reward on the
+            // game closes it without punishing anyone — a real replay still gets the whole
+            // cinematic, it just doesn't get paid for a second time.
+            var awarded = 0
             if (entry.state != PileState.COMPLETED) {
                 pileDao.update(
                     entry.copy(
@@ -63,7 +80,12 @@ class CreditsRollViewModel @Inject constructor(
                         startedAt = entry.startedAt ?: entry.addedAt,
                     )
                 )
-                billingRepository.earnCoins(COMPLETION_COIN_REWARD, "game_cleared")
+                val paid = billingRepository.earnCoinsOnce(
+                    clearRewardKey(entry.gameId),
+                    COMPLETION_COIN_REWARD,
+                    "game_cleared",
+                )
+                if (paid) awarded = COMPLETION_COIN_REWARD
             }
 
             val startedAt = entry.startedAt ?: entry.addedAt
@@ -89,6 +111,7 @@ class CreditsRollViewModel @Inject constructor(
                     startedLabel = dateFormat.format(Date(startedAt)),
                     finishedLabel = dateFormat.format(Date(finishedAt)),
                     clearOrdinal = ordinal,
+                    coinsAwarded = awarded,
                 )
             }
 

@@ -8,10 +8,9 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.mikhilnaika.continueapp.core.data.AddSource
+import com.mikhilnaika.continueapp.core.data.GameCacheRepository
 import com.mikhilnaika.continueapp.core.data.PileState
-import com.mikhilnaika.continueapp.core.data.dao.GameDao
 import com.mikhilnaika.continueapp.core.data.dao.PileDao
-import com.mikhilnaika.continueapp.core.data.entity.GameEntity
 import com.mikhilnaika.continueapp.core.data.entity.PileEntryEntity
 import com.mikhilnaika.continueapp.core.network.GameDataSource
 import com.mikhilnaika.continueapp.core.network.dto.ResolveCandidateDto
@@ -24,8 +23,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import kotlin.coroutines.resume
 
@@ -57,15 +54,13 @@ internal fun looksLikeTikTokLink(raw: String?): Boolean =
 class ShareTargetViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val gameDataSource: GameDataSource,
-    private val gameDao: GameDao,
+    private val gameCacheRepository: GameCacheRepository,
     private val pileDao: PileDao,
     private val offlineGameIndex: OfflineGameIndex,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<ShareResolutionState>(ShareResolutionState.Loading)
     val state: StateFlow<ShareResolutionState> = _state
-
-    private val json = Json { ignoreUnknownKeys = true }
 
     /**
      * What to put in the manual-entry field — a cleaned, URL-free fragment, or null.
@@ -203,27 +198,20 @@ class ShareTargetViewModel @Inject constructor(
         }.onFailure { cont.resume(null) }
     }
 
+    /**
+     * A resolve candidate carries only an id, a name and a cover, so this used to write exactly
+     * that into `games` — nulls for the key art, the release date and all three playtimes, and
+     * empty arrays for genres, themes and platforms — with an unconditional REPLACE.
+     *
+     * Two bugs in one line. A game shared in was permanently unfilterable, permanently
+     * "ENDLESS", and had no key art for its Credits Roll (the *"Ghost of Tsushima has no
+     * banner"* report — IGDB has the artwork, the app had simply never asked for it). And
+     * sharing in a game that was *already* fully cached overwrote the good row with the stub.
+     * [GameCacheRepository.cacheMinimal] owns both rules now.
+     */
     fun addCandidate(candidate: ResolveCandidateDto) {
         viewModelScope.launch {
-            gameDao.upsert(
-                GameEntity(
-                    id = candidate.id,
-                    slug = candidate.name.lowercase().replace(Regex("[^a-z0-9]+"), "-"),
-                    name = candidate.name,
-                    coverUrl = candidate.coverUrl,
-                    backgroundUrl = null,
-                    released = null,
-                    metacritic = null,
-                    rating = null,
-                    playtimeHoursHastily = null,
-                    playtimeHoursNormally = null,
-                    playtimeHoursCompletely = null,
-                    genresJson = json.encodeToString(emptyList<String>()),
-                    tagsJson = json.encodeToString(emptyList<String>()),
-                    platformsJson = json.encodeToString(emptyList<String>()),
-                    cachedAt = System.currentTimeMillis(),
-                )
-            )
+            gameCacheRepository.cacheMinimal(candidate.id, candidate.name, candidate.coverUrl)
             if (pileDao.findByGameId(candidate.id) == null) {
                 pileDao.insert(
                     PileEntryEntity(
@@ -235,6 +223,10 @@ class ShareTargetViewModel @Inject constructor(
                 )
             }
             _state.value = ShareResolutionState.Added(candidate.name)
+            // Only *after* the sheet has said "added". The fetch runs on the repository's own
+            // process-scoped coroutine, because this Activity is about to finish and take
+            // `viewModelScope` with it.
+            gameCacheRepository.hydrateInBackground(candidate.id)
         }
     }
 
