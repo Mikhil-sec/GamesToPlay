@@ -67,7 +67,7 @@
 <header>
   <p class="kicker">Privacy Policy</p>
   <h1>CONTINUE<span class="q">?</span></h1>
-  <p class="meta">Effective 15 August 2026 · Last updated 15 August 2026 · Applies to the Android
+  <p class="meta">Effective 15 August 2026 · Last updated 12 September 2026 · Applies to the Android
   app <code>com.mikhilnaika.continueapp</code></p>
 </header>
 
@@ -143,6 +143,27 @@ term itself, so that repeated lookups are fast and cheap.</p>
 <p>If you are offline, the app falls back to its on-device index and database and sends
 nothing at all.</p>
 
+<h2>3a. Sharing a game or a card with someone</h2>
+<p>CONTINUE? can share a game with a friend, and can make an image summarising your pile, a
+game you cleared, or your all-time top ten.</p>
+<p><strong>Nothing about a share reaches us.</strong> The image is drawn on your phone from data
+already on your phone, saved into the app's own private cache, and handed to whichever app you
+choose in Android's share sheet. The message and the link are assembled on your device too.
+Your phone does not contact our server in order to share anything, and we are never told that
+you shared, what you shared, or who you shared it with.</p>
+<p><strong>What you share is your choice, and it is visible to whoever receives it.</strong> A
+pile card shows your total hours and game count; a cleared card shows a game, its length and
+its position in your ranking; a high-scores card shows your top ten. Once you send it, it is in
+the hands of the app and the people you sent it to, exactly like any other photo or message.
+Nothing is posted anywhere on your behalf and nothing is shared automatically.</p>
+<p><strong>Links you send are public.</strong> A shared game link looks like
+<code>continue-worker.gamestoplay.workers.dev/g/1942</code> — a game's numeric ID and nothing
+else. It contains no identifier for you, so it cannot be traced back to you or to your pile,
+and anyone holding the link sees the same page as anyone else. When someone opens it, their
+device (or their messaging app, generating a preview) requests that page from our server and
+loads the game's artwork from IGDB, as described in section 6. That request comes from
+<em>their</em> device, not yours.</p>
+
 <h2>4. Purchases and subscriptions</h2>
 <p>Purchases are handled by <strong>Google Play Billing</strong>. We never see or receive your
 payment details — Google does not share them with us.</p>
@@ -182,8 +203,17 @@ data from apps that use its services</a>.</p>
 <h2>6. Game information</h2>
 <p>Game titles, cover art, release dates, ratings and playtime estimates come from
 <a href="https://www.igdb.com" rel="noopener">IGDB.com</a>. The data was freely provided by
-IGDB.com. Requests to IGDB are made by our server, never by your device directly, so IGDB never
-sees your IP address or anything about you.</p>
+IGDB.com.</p>
+<p><strong>Game data</strong> — titles, dates, genres, playtime estimates — is requested by our
+server, never by your device, so IGDB's data API never sees anything about you.</p>
+<p><strong>Cover art and key art are different.</strong> Those images are served from IGDB's
+image CDN at <code>images.igdb.com</code>, and your device loads them from there directly, the
+same way any app or web page loads an image hosted elsewhere. That means IGDB's CDN sees your
+device's IP address and the images you requested, as any image host would. We do this because
+proxying every cover through our own server would be slower, would cost far more, and would not
+meaningfully change what IGDB could infer. IGDB's own
+<a href="https://www.igdb.com/privacy" rel="noopener">privacy policy</a> governs what they do
+with it. No identifier of ours travels with those requests.</p>
 
 <h2>7. Children</h2>
 <p>CONTINUE? is not directed to children. It is rated for users aged 13 and over, and we do not

@@ -45,6 +45,7 @@ import com.mikhilnaika.continueapp.core.design.ContinueColors
 import com.mikhilnaika.continueapp.core.design.ContinueSpacing
 import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
 import com.mikhilnaika.continueapp.core.ui.EmptyState
+import com.mikhilnaika.continueapp.core.ui.IgdbAttribution
 
 /** docs/02-PRODUCT-SPEC.md §1 "Stacks (collections)". */
 @Composable
@@ -143,6 +144,9 @@ fun StacksScreen(
                         }
                     }
                 }
+                // Stack covers and titles are IGDB's — the credit follows the data, not the
+                // screen's importance.
+                IgdbAttribution()
             }
         }
     }

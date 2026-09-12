@@ -302,6 +302,24 @@ function htmlHeaders(maxAge: number): HeadersInit {
     "Content-Type": "text/html; charset=utf-8",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
+    /**
+     * Keep search engines out of this route entirely.
+     *
+     * Not an SEO preference — a quota defence. `/g/<id>` is the first endpoint in this project
+     * whose URLs are meant to be **posted in public**, and a cache miss costs one IGDB request
+     * plus one KV write against a 1,000 writes/day budget (docs/12-SECURITY.md). A crawler that
+     * discovers one shared link on a public page and walks the id space would spend that budget
+     * in minutes, with entirely innocent intent and from addresses the per-IP limiter treats as
+     * well-behaved because each request is slow and polite.
+     *
+     * `nofollow` matters as much as `noindex`: without it a crawler still follows the links it
+     * finds here, and `noindex` only stops the result being *listed*, not fetched.
+     *
+     * Malicious enumeration is a different problem and is handled elsewhere — this route is not
+     * exempt from either rate limiter, and the account-wide one is what stops a distributed
+     * walk. See `checkRateLimits` in security.ts.
+     */
+    "X-Robots-Tag": "noindex, nofollow",
     "Cache-Control": maxAge > 0 ? `public, max-age=${maxAge}` : "no-store",
   };
 }

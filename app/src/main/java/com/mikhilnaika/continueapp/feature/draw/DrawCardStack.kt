@@ -43,6 +43,7 @@ import com.mikhilnaika.continueapp.core.design.ContinueColors
 import com.mikhilnaika.continueapp.core.design.ContinueMotion
 import com.mikhilnaika.continueapp.core.design.ContinueSpacing
 import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
+import com.mikhilnaika.continueapp.core.ui.IgdbAttribution
 import com.mikhilnaika.continueapp.core.util.Haptics
 import com.mikhilnaika.continueapp.core.util.IgdbImage
 import kotlin.math.abs
@@ -101,6 +102,10 @@ fun DrawCardStack(
                     }
                 }
                 SwipeLegend()
+                // The dealt cards are IGDB covers and IGDB titles, so the credit belongs on
+                // this phase — the DIALS screen before it shows none of their data, and its
+                // layout is measured to the pixel around the lever anyway.
+                IgdbAttribution()
             }
             DrawPhase.DONE -> DrawDoneSummary(state = state, onDone = onDone)
             else -> Unit

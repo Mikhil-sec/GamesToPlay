@@ -35,6 +35,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.mikhilnaika.continueapp.core.design.ContinueColors
 import com.mikhilnaika.continueapp.core.design.ContinueSpacing
 import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
+import com.mikhilnaika.continueapp.core.ui.IgdbAttribution
 import com.mikhilnaika.continueapp.core.ui.EmptyState
 
 /**
@@ -121,14 +122,7 @@ fun StatsScreen(
         barSection(key = "platform", title = "PLATFORM", bars = snapshot.platforms, accent = ContinueColors.AccentCool)
         barSection(key = "decade", title = "RELEASED", bars = snapshot.decades, accent = ContinueColors.AccentHot)
 
-        item(key = "igdb") {
-            Spacer(modifier = Modifier.height(ContinueSpacing.XL.dp))
-            Text(
-                text = "The data was freely provided by IGDB.com",
-                style = ContinueTextStyles.label,
-                color = ContinueColors.TextTertiary,
-            )
-        }
+        item(key = "igdb") { IgdbAttribution() }
     }
 }
 

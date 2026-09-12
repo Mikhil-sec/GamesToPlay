@@ -45,6 +45,7 @@ import com.mikhilnaika.continueapp.core.design.ContinueColors
 import com.mikhilnaika.continueapp.core.design.ContinueSpacing
 import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
 import com.mikhilnaika.continueapp.core.ui.EmptyState
+import com.mikhilnaika.continueapp.core.ui.IgdbAttribution
 
 /** YOU tab — docs/02-PRODUCT-SPEC.md §7. */
 @Composable
@@ -196,14 +197,7 @@ fun ProfileScreen(
             )
         }
 
-        item {
-            androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = ContinueSpacing.XL.dp))
-            Text(
-                text = "The data was freely provided by IGDB.com",
-                style = ContinueTextStyles.label,
-                color = ContinueColors.TextTertiary,
-            )
-        }
+        item { IgdbAttribution() }
     }
 
     removingScore?.let { entry ->

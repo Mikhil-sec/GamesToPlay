@@ -61,6 +61,7 @@ import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
 import com.mikhilnaika.continueapp.core.network.dto.GameDto
 import com.mikhilnaika.continueapp.core.ui.GameCard
 import com.mikhilnaika.continueapp.core.ui.GameDatesDialog
+import com.mikhilnaika.continueapp.core.ui.IgdbAttribution
 import com.mikhilnaika.continueapp.core.util.IgdbImage
 import com.mikhilnaika.continueapp.core.util.Playtime
 import kotlinx.coroutines.delay
@@ -459,25 +460,6 @@ private fun ShareHint() {
             color = ContinueColors.TextSecondary,
         )
     }
-}
-
-/**
- * Required, not decorative: IGDB's commercial-partnership terms ask for user-facing
- * attribution on products integrating their data, and CLAUDE.md makes it non-negotiable on
- * any screen showing it. DISCOVER is the most IGDB-dense screen in the app — search results,
- * both rails, and all the cover art come straight from them.
- */
-@Composable
-private fun IgdbAttribution() {
-    Text(
-        text = "The data was freely provided by IGDB.com",
-        style = ContinueTextStyles.label,
-        color = ContinueColors.TextTertiary,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(ContinueSpacing.LG.dp),
-        textAlign = TextAlign.Center,
-    )
 }
 
 @Composable

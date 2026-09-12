@@ -67,6 +67,7 @@ import com.mikhilnaika.continueapp.core.share.ShareLinks
 import com.mikhilnaika.continueapp.core.ui.EmptyState
 import com.mikhilnaika.continueapp.core.ui.GameCard
 import com.mikhilnaika.continueapp.core.ui.GameDatesDialog
+import com.mikhilnaika.continueapp.core.ui.IgdbAttribution
 import com.mikhilnaika.continueapp.core.ui.LocalHaptics
 import com.mikhilnaika.continueapp.core.util.CalendarDates
 import com.mikhilnaika.continueapp.core.util.GameFacet
@@ -223,6 +224,7 @@ fun PileScreen(
                             onLongClick = { actionMenuEntry = entry },
                         )
                     }
+                    item(span = { GridItemSpan(maxLineSpan) }, key = "igdb") { IgdbAttribution() }
                 }
             }
         }
@@ -259,6 +261,7 @@ fun PileScreen(
                             onLongClick = { actionMenuEntry = entry },
                         )
                     }
+                    item(key = "igdb") { IgdbAttribution() }
                 }
             }
         }

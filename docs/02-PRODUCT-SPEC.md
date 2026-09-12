@@ -381,7 +381,14 @@ Full-screen, ~7 seconds, skippable by tap:
 5. Coin shower particle burst + a celebratory haptic pattern.
 6. `RANK IT ▸` button slides up.
 
-Award +5 coins for the completion — completion should *pay*.
+Award **+1 coin** for the completion, once per game — completion should *pay*, but not much.
+
+> **Changed 2026-09-12, was +5.** A DRAW re-roll costs 1 coin, so at +5 clearing two games
+> bought ten re-rolls and an ordinary player never ran out — which removes every reason to
+> watch a rewarded ad or buy Pro, the two things the coin exists to motivate. 5 was also a
+> deliberate convenience during closed testing, where the goal was pushing testers *through*
+> the paid surfaces rather than metering them. The real reward for finishing a game is the
+> Credits Roll; the coin is an acknowledgement.
 
 ---
 

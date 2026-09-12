@@ -265,6 +265,27 @@ Declare exactly these five, and nothing else:
 - **Contacts, calendar, SMS, call logs, files, health, messages.** Not touched.
 - **Precise location.** No location permission is requested.
 
+**The share feature (2026-09-12) adds no new Data Safety declarations.** Checked deliberately,
+because it looks like it should. Sharing draws the card on-device from data already on-device,
+writes it to the app's own cache, and hands it to Android's share sheet — **the app makes no
+network call in order to share**, so nothing new is collected and nothing new is shared *by us*.
+The `/g/<igdbId>` link carries a game id and no identifier, and the request for that page comes
+from the **recipient's** device, not the sharer's. It is the same "a game's numeric ID" row
+already declared under in-app search history.
+
+- **Still do not declare Photos or videos.** The app now *creates* an image, which is not the
+  same as accessing one. It reads nothing from the photo library and holds no such permission.
+- **Play's "shared" column means shared with a third party by us.** A user handing their own
+  card to WhatsApp is the user sharing, not the app, exactly as with any screenshot.
+
+⚠️ **One thing that was wrong and is now fixed, unrelated to sharing.** The privacy policy §6
+claimed *"Requests to IGDB are made by our server, never by your device directly, so IGDB never
+sees your IP address."* That is true of IGDB's **data API** and false of its **image CDN** — the
+app has always loaded cover art straight from `images.igdb.com` via Coil, at ~20 call sites. The
+policy now says so plainly. This predates the share work and was live on the published listing;
+it did not require a Data Safety change (no new data type is collected *by us*), but a policy
+that contradicts observable app behaviour is exactly what gets a listing pulled.
+
 > If you ever add RevenueCat customer attributes (email, name) or a custom app user ID, come
 > back and add **Personal info** and flip purchase history to *linked to identity*. Until then
 > the above is the accurate picture.

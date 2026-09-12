@@ -25,8 +25,22 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
-/** docs/02-PRODUCT-SPEC.md §4 — awarded on completion, "completion should pay". */
-const val COMPLETION_COIN_REWARD = 5
+/**
+ * docs/02-PRODUCT-SPEC.md §4 — awarded on completion, "completion should pay".
+ *
+ * **1, not 5 (changed 2026-09-12.)** The spec's 5 was set before the economy around it existed
+ * and, once it did, it broke it: a DRAW re-roll costs 1, so clearing two games bought ten
+ * re-rolls and a normal player never ran out of coins. A currency nobody runs out of gives
+ * nobody a reason to watch a rewarded ad or buy Pro — which are the two things the coin exists
+ * to motivate. The generous number was also convenient during closed testing, where the point
+ * was getting testers *through* the paid surfaces rather than metering them.
+ *
+ * This deliberately makes clearing a game pay the same as watching one ad. That reads odd on
+ * paper — forty hours versus thirty seconds — but the coin was never the reward for finishing
+ * a game. The Credits Roll is. The coin is an acknowledgement, and pricing it as anything more
+ * puts the app in the position of implying its own core loop is the grind.
+ */
+const val COMPLETION_COIN_REWARD = 1
 
 data class CreditsRollUiState(
     val isLoading: Boolean = true,

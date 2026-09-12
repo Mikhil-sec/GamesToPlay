@@ -11,11 +11,19 @@ import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 /**
- * No real RevenueCat products/offerings/paywall exist yet — only the project, app,
- * entitlement, and virtual currency are provisioned (docs/09-PENDING-INPUTS.md). Debug
- * builds get [FakeBillingRepository] so paywall/coin UI can be built and demoed today;
- * `Purchases.configure()` still runs for real in both (see ContinueApplication), so the
- * anonymous app-user ID flows regardless. Flip DEBUG builds to Real once products exist.
+ * **Every shipped build uses [RealBillingRepository] and the RevenueCat SDK for real.** Only
+ * `debug` gets [FakeBillingRepository], and only so the paywall and coin UI can be worked on
+ * without a Play licence-tester account and a live purchase per iteration.
+ *
+ * `Purchases.configure()` runs for real in *both* (see `ContinueApplication`), so the anonymous
+ * app-user ID flows either way.
+ *
+ * **Correction 2026-09-12 — the note that used to be here was stale.** It said "no real
+ * RevenueCat products/offerings/paywall exist yet" and told a future reader to flip debug to
+ * Real "once products exist". All five products, both offerings and the `pro` entitlement have
+ * been provisioned since 2026-08-12, and closed testers have completed real Play transactions
+ * through this class with the entitlement going active (verified in RevenueCat 2026-09-07).
+ * The debug/release split stays as it is — it's a development convenience, not a gap.
  */
 @Module
 @InstallIn(SingletonComponent::class)
