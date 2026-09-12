@@ -5,7 +5,12 @@
 > what's next. Update it whenever you finish a chunk of work or discover something that
 > changes this picture — don't let it go stale like a comment nobody re-reads.
 >
-> Last updated: **2026-09-12** — **production access is GRANTED**, and **SHARE was rebuilt around
+> Last updated: **2026-09-12** (second entry same day) — **`versionCode 9` / `0.9.0` is built
+> and signed** with the real Play App Signing fingerprint in place; clear reward cut +5→+1; a live
+> privacy-policy inaccuracy about IGDB's image CDN fixed; IGDB credits now on six screens.
+> 🔴 **The Worker still needs `npx wrangler deploy` before that build is installed.**
+>
+> Earlier that day — **production access is GRANTED**, and **SHARE was rebuilt around
 > a friend loop**: a shared game is now a real Android App Link that unfurls with key art in
 > WhatsApp/Discord and opens straight into the app. Three properly designed cards replace the one
 > Roboto-on-a-rectangle card, the Credits Roll finally has a share button, and the fake
@@ -91,6 +96,55 @@
 > RevenueCat, which shows real customer records tagged `0.2.0` and `0.3.0`. Only *Closed*
 > testing has stayed on `versionCode 4` throughout; Internal testing has been iterated on the
 > whole time. "Never uploaded" below refers only to the Closed track.
+
+---
+
+## 2026-09-12 (later) — `versionCode 9` / `0.9.0` is built and signed
+
+The blocking input landed. Mikhil read the **Play App Signing SHA-256** out of Play Console
+(`F1:A8:69:…:6B:B4`) and it is now in `worker/src/routes/gameLink.ts`. It is correctly
+*different* from the upload key — there is a test asserting exactly that, because pasting the
+upload certificate into the Play App Signing slot produces 32 valid hex bytes that look entirely
+right and break links for every real user while working perfectly on a sideloaded build.
+
+Also this pass, following Mikhil's review:
+
+- **The clear reward dropped +5 → +1** (`COMPLETION_COIN_REWARD`). A DRAW re-roll costs 1, so at
+  +5 clearing two games bought ten re-rolls and nobody ever ran out — which removes every reason
+  to watch a rewarded ad or buy Pro. The 5 was a closed-testing convenience.
+- **The privacy policy had a false statement, unrelated to sharing, and it was live.** §6 claimed
+  *"Requests to IGDB are made by our server, never by your device directly, so IGDB never sees
+  your IP address."* True of IGDB's **data API** (`api.igdb.com`, which only the Worker touches);
+  **false of the image CDN** (`images.igdb.com`), which every device hits directly via Coil at
+  ~20 call sites. Rewritten to separate the two honestly, plus a new **§3a** covering sharing.
+  No Data Safety change needed — the share feature collects nothing new, which was checked
+  deliberately rather than assumed (see `docs/13-STORE-LISTING.md` §8).
+- **`X-Robots-Tag: noindex, nofollow` on `/g/<id>`.** A quota defence, not SEO: it is the first
+  endpoint here whose URLs are meant to be posted publicly, and a cache miss costs one IGDB call
+  plus one KV write against 1,000/day. A crawler walking the id space would drain that with no
+  malice at all. Deliberate enumeration was already covered by the rate limiters.
+- **One IGDB attribution component, on six screens.** There were three hand-rolled copies with
+  different styling and none of them linked anywhere. `core/ui/IgdbAttribution.kt` is now shared
+  and tappable through to igdb.com, and it was added to **PILE** (grid + list), **STACKS** and
+  **DRAW**'s dealt-cards phase, which showed IGDB data and credited nobody. Deliberately *not*
+  on DRAW's dials (no IGDB data there, and that layout is measured to the pixel around the lever)
+  or the Credits Roll (a full-screen cinematic).
+- **`BillingModule`'s doc comment was badly stale** — it claimed no RevenueCat products existed
+  and told a reader to flip debug to Real "once products exist". All five have existed since
+  2026-08-12 and testers have transacted through this class. Corrected.
+
+**Verified in the artifact, not the source:** `jarsigner -verify` → *jar verified*; the release
+merged manifest reads `versionCode="9"`, `versionName="0.9.0"`, `autoVerify="true"`,
+`host="continue-worker.gamestoplay.workers.dev"`, `pathPrefix="/g/"`; and the strings
+`continue-worker.gamestoplay.workers.dev`, `/g/` and `autoVerify` are present inside the bundle's
+own proto manifest. 32.8 MB at `app/build/outputs/bundle/release/app-release.aab`.
+
+**166 app tests + 66 worker tests, 0 failures.**
+
+🔴 **The Worker is still not deployed.** `npx wrangler deploy` from `worker/` — this environment
+blocks production deploys. **It must run before `versionCode 9` is installed anywhere**, because
+Android fetches `/.well-known/assetlinks.json` at *install* time; a build installed while that
+path still 404s stays unverified until the next reinstall or app update, and nothing reports it.
 
 ---
 

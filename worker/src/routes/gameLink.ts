@@ -50,10 +50,10 @@ const PLAY_URL = `https://play.google.com/store/apps/details?id=${ANDROID_PACKAG
 const SIGNING_FINGERPRINTS: ReadonlyArray<{ pkg: string; sha256: string; note: string }> = [
   {
     pkg: ANDROID_PACKAGE,
-    // TODO(mikhil): replace with the real Play App Signing SHA-256 — see (1) above. Until this
-    // is the genuine value, links will NOT open the app for anyone who installed from Play.
-    // The placeholder is harmless (it simply matches no certificate) but it is not optional.
-    sha256: "PLAY_APP_SIGNING_SHA256_PENDING",
+    // Supplied by Mikhil from Play Console on 2026-09-12. Note it is deliberately *not* the
+    // same as the upload key below — if these two ever match, something has gone wrong and
+    // Play App Signing is not what you think it is.
+    sha256: "F1:A8:69:03:91:AB:A3:89:CB:FF:AE:D9:8C:67:CD:59:91:80:C9:6A:E4:89:F4:51:4B:6C:7B:97:3C:B7:6B:B4",
     note: "Play App Signing key — the certificate real users' installs carry",
   },
   {

@@ -166,18 +166,29 @@ test("every published fingerprint is a well-formed SHA-256, or is the flagged pl
 });
 
 /**
- * This assertion is the reminder, and it is meant to be flipped.
+ * Filled in 2026-09-12, and this assertion flipped with it — working exactly as intended.
  *
- * App Links verification fails **silently**: with a wrong fingerprint, Android just opens a
- * browser and nothing anywhere logs a complaint, so there is no natural moment at which
- * someone discovers this was never filled in. When the real Play App Signing SHA-256 lands in
- * gameLink.ts, this test goes red and you change `false` to `true` — which is a far more
- * reliable prompt than a TODO nobody greps for.
+ * It stays as a **regression** guard now rather than a reminder. App Links verification fails
+ * silently: with a wrong or missing fingerprint Android just opens a browser and nothing
+ * anywhere logs a complaint. So if anyone ever reverts this constant to a placeholder while
+ * refactoring, the suite says so instead of the feature quietly dying in the field.
  */
-test("PENDING: the Play App Signing fingerprint has not been filled in yet", () => {
+test("the Play App Signing fingerprint is filled in", () => {
   assert.equal(
     hasRealPlayFingerprint(),
-    false,
-    "The Play App Signing SHA-256 now looks real — flip this expectation to `true`.",
+    true,
+    "The Play App Signing SHA-256 is back to a placeholder — shared links will not open the app.",
   );
+});
+
+test("the Play signing key and the upload key are different certificates", () => {
+  // The trap this guards: pasting the *upload* certificate into the Play App Signing slot.
+  // Both are 32 valid hex bytes, both look completely correct, and the result is an app that
+  // opens links for a sideloaded build on the bench and for nobody who installed from Play.
+  const body = assetLinksBody() as Array<{
+    target: { package_name: string; sha256_cert_fingerprints: string[] };
+  }>;
+  const release = body.find((s) => s.target.package_name === "com.mikhilnaika.continueapp")!;
+  const [playSigning, uploadKey] = release.target.sha256_cert_fingerprints;
+  assert.notEqual(playSigning, uploadKey);
 });
