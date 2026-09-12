@@ -63,6 +63,7 @@ import com.mikhilnaika.continueapp.core.data.dao.PileEntryWithGame
 import com.mikhilnaika.continueapp.core.design.ContinueColors
 import com.mikhilnaika.continueapp.core.design.ContinueSpacing
 import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
+import com.mikhilnaika.continueapp.core.share.ShareLinks
 import com.mikhilnaika.continueapp.core.ui.EmptyState
 import com.mikhilnaika.continueapp.core.ui.GameCard
 import com.mikhilnaika.continueapp.core.ui.GameDatesDialog
@@ -289,6 +290,10 @@ fun PileScreen(
                 actionMenuEntry = null
                 datesEntry = entry
             },
+            onShare = { campaign ->
+                actionMenuEntry = null
+                viewModel.shareGame(entry.gameId, entry.name, campaign)
+            },
             onRemove = {
                 actionMenuEntry = null
                 removeConfirmEntry = entry
@@ -363,6 +368,7 @@ private fun PileActionMenu(
     onMove: (PileState) -> Unit,
     onToggleStack: (Long) -> Unit,
     onEditDates: () -> Unit,
+    onShare: (ShareLinks.Campaign) -> Unit,
     onRemove: () -> Unit,
 ) {
     AlertDialog(
@@ -407,6 +413,44 @@ private fun PileActionMenu(
                         TextButton(onClick = { onToggleStack(stack.stackId) }) {
                             Text("${stack.emoji.orEmpty()} ${stack.name}".trim())
                         }
+                    }
+                }
+
+                // The friend loop's outbound half. Two verbs rather than one "share": the
+                // difference between handing someone a game and betting they won't finish it
+                // is the entire social dynamic this app is about, and it costs one extra row.
+                Text(
+                    text = "SEND TO A FRIEND",
+                    style = ContinueTextStyles.label,
+                    color = ContinueColors.TextTertiary,
+                    modifier = Modifier.padding(top = ContinueSpacing.SM.dp),
+                )
+                TextButton(onClick = { onShare(ShareLinks.Campaign.PICK) }, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "RECOMMEND IT",
+                            style = ContinueTextStyles.body,
+                            color = ContinueColors.AccentNeon,
+                        )
+                        Text(
+                            text = "They tap the link, it lands on their pile",
+                            style = ContinueTextStyles.label,
+                            color = ContinueColors.TextTertiary,
+                        )
+                    }
+                }
+                TextButton(onClick = { onShare(ShareLinks.Campaign.DARE) }, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "DARE THEM TO FINISH IT",
+                            style = ContinueTextStyles.body,
+                            color = ContinueColors.AccentNeon,
+                        )
+                        Text(
+                            text = "Same link, worse manners",
+                            style = ContinueTextStyles.label,
+                            color = ContinueColors.TextTertiary,
+                        )
                     }
                 }
 

@@ -10,6 +10,7 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.mikhilnaika.continueapp.core.data.AddSource
 import com.mikhilnaika.continueapp.core.data.GameCacheRepository
 import com.mikhilnaika.continueapp.core.data.PileState
+import com.mikhilnaika.continueapp.core.data.dao.GameDao
 import com.mikhilnaika.continueapp.core.data.dao.PileDao
 import com.mikhilnaika.continueapp.core.data.entity.PileEntryEntity
 import com.mikhilnaika.continueapp.core.network.GameDataSource
@@ -55,6 +56,7 @@ class ShareTargetViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val gameDataSource: GameDataSource,
     private val gameCacheRepository: GameCacheRepository,
+    private val gameDao: GameDao,
     private val pileDao: PileDao,
     private val offlineGameIndex: OfflineGameIndex,
 ) : ViewModel() {
@@ -87,6 +89,58 @@ class ShareTargetViewModel @Inject constructor(
         viewModelScope.launch {
             _state.value = ShareResolutionState.Loading
             resolveAgainstWorker(text, subject)
+        }
+    }
+
+    /**
+     * The friend loop — an incoming `/g/<igdbId>` link, which already names its game exactly.
+     *
+     * No resolution, no ranking, no guessing: the whole fuzzy-matching apparatus above exists
+     * because TikTok and YouTube hand over captions instead of titles, and a link minted by
+     * CONTINUE? itself has no such problem. What this path *does* need that the others don't
+     * is to work with no network, because the most likely place to tap a friend's link is a
+     * group chat on the bus.
+     *
+     * Order is therefore local-cache first, network second — the reverse of what a "fetch the
+     * game" method would naturally do. A game a friend recommends is very often one already
+     * sitting in this device's `games` table (they're in the same circles, that's why they're
+     * recommending it), so the common case is answered instantly and offline.
+     */
+    fun resolveGameId(gameId: Long) {
+        isTikTokShare = false
+        lastPrefill = null
+        viewModelScope.launch {
+            _state.value = ShareResolutionState.Loading
+
+            if (pileDao.findByGameId(gameId) != null) {
+                val known = gameDao.get(gameId)
+                _state.value = ShareResolutionState.AlreadyInPile(known?.name ?: "That game")
+                return@launch
+            }
+
+            val cached = gameDao.get(gameId)
+            if (cached != null) {
+                _state.value = ShareResolutionState.Confident(
+                    ResolveCandidateDto(id = cached.id, name = cached.name, confidence = 1f, coverUrl = cached.coverUrl)
+                )
+                return@launch
+            }
+
+            // `detail` is documented never to throw — it returns null for both "unknown id"
+            // and "couldn't reach the Worker". Both land on manual entry with an empty field,
+            // which is the honest outcome: we know a game was meant, we just can't name it, so
+            // the user can search for it by hand rather than staring at a dead sheet.
+            val fetched = gameDataSource.detail(gameId)
+            _state.value = if (fetched != null) {
+                ShareResolutionState.Confident(
+                    ResolveCandidateDto(id = fetched.id, name = fetched.name, confidence = 1f, coverUrl = fetched.coverUrl)
+                )
+            } else {
+                ShareResolutionState.ManualEntry(
+                    prefillText = null,
+                    note = "Couldn't load the game your friend sent — search for it, or try again with a connection.",
+                )
+            }
         }
     }
 
@@ -212,7 +266,12 @@ class ShareTargetViewModel @Inject constructor(
     fun addCandidate(candidate: ResolveCandidateDto) {
         viewModelScope.launch {
             gameCacheRepository.cacheMinimal(candidate.id, candidate.name, candidate.coverUrl)
-            if (pileDao.findByGameId(candidate.id) == null) {
+            // The duplicate check already existed and correctly skipped the insert; what it
+            // didn't do was tell the user, so the sheet said "added to your pile" for a game
+            // that was already there. Reporting the real outcome costs one branch and answers
+            // the question they actually had.
+            val alreadyThere = pileDao.findByGameId(candidate.id) != null
+            if (!alreadyThere) {
                 pileDao.insert(
                     PileEntryEntity(
                         gameId = candidate.id,
@@ -222,7 +281,11 @@ class ShareTargetViewModel @Inject constructor(
                     )
                 )
             }
-            _state.value = ShareResolutionState.Added(candidate.name)
+            _state.value = if (alreadyThere) {
+                ShareResolutionState.AlreadyInPile(candidate.name)
+            } else {
+                ShareResolutionState.Added(candidate.name)
+            }
             // Only *after* the sheet has said "added". The fetch runs on the repository's own
             // process-scoped coroutine, because this Activity is about to finish and take
             // `viewModelScope` with it.

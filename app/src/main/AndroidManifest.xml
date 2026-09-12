@@ -62,6 +62,42 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
+
+            <!-- The friend loop's receiving end — docs/02-PRODUCT-SPEC.md §6.
+
+                 A `https://<worker>/g/<igdbId>` link tapped in WhatsApp/Discord opens this
+                 same sheet, so a game a friend sent is two taps from being in your pile. It
+                 lands here rather than on MainActivity deliberately: the sheet already is the
+                 "a game arrived from somewhere else, add it?" surface, and reusing it means
+                 the friend loop inherits the whole degradation ladder (offline, unknown id,
+                 already in the pile) instead of growing a second one.
+
+                 `autoVerify` makes Android fetch
+                 https://<worker>/.well-known/assetlinks.json at install time; if the signing
+                 fingerprint there doesn't match, verification fails **silently** and these
+                 links open a browser instead. Worth knowing that the failure is invisible —
+                 see worker/src/routes/gameLink.ts, which serves that file.
+
+                 The host is a placeholder fed from WORKER_BASE_URL in local.properties, so it
+                 cannot drift from the host the app builds its links against. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="${shareLinkHost}" android:pathPrefix="/g/" />
+            </intent-filter>
+
+            <!-- The custom scheme the landing page's `intent://` button targets — the fallback
+                 for installs where App Links verification never took (an old Android, a
+                 sideload, or a fingerprint not yet updated). Unverifiable by design, so it is
+                 never the primary path and nothing is trusted from it that isn't also
+                 validated on the https path: both funnel into the same id parse. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="continueapp" android:host="g" />
+            </intent-filter>
         </activity>
 
         <!-- Share card image handoff — docs/02-PRODUCT-SPEC.md §6 "SHARE". -->

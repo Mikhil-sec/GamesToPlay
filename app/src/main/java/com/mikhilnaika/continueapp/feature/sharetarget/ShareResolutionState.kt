@@ -22,6 +22,17 @@ sealed interface ShareResolutionState {
      */
     data class ManualEntry(val prefillText: String?, val note: String? = null) : ShareResolutionState
     data class Added(val gameName: String) : ShareResolutionState
+
+    /**
+     * A friend sent a game that's already on the pile.
+     *
+     * Its own rung rather than a silent success, because the friend loop makes this common —
+     * people recommend each other the same well-known games — and [ShareTargetViewModel
+     * .addCandidate] would otherwise skip the insert and still report "added to your pile",
+     * which is a lie the user can check. Saying so also answers the question they actually
+     * have, which is whether they already had it.
+     */
+    data class AlreadyInPile(val gameName: String) : ShareResolutionState
 }
 
 private const val CONFIDENCE_THRESHOLD = 0.85f

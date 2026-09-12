@@ -9,6 +9,10 @@ import com.mikhilnaika.continueapp.core.data.dao.DrawDao
 import com.mikhilnaika.continueapp.core.data.dao.GameDao
 import com.mikhilnaika.continueapp.core.data.dao.PileDao
 import com.mikhilnaika.continueapp.core.data.dao.RankingDao
+import com.mikhilnaika.continueapp.core.share.HighScoreLine
+import com.mikhilnaika.continueapp.core.share.ShareCardRenderer
+import com.mikhilnaika.continueapp.core.share.ShareLinks
+import com.mikhilnaika.continueapp.core.util.Playtime
 import com.mikhilnaika.continueapp.core.util.estimatedHours
 import com.mikhilnaika.continueapp.feature.rank.PairwiseRanker
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -28,6 +32,8 @@ data class HighScoreEntry(
     val name: String,
     val coverUrl: String?,
     val verdict: String?,
+    /** Estimated length, for the HIGH SCORES share card's right-hand column. */
+    val hours: Int? = null,
 )
 
 data class Trophy(val id: String, val label: String, val description: String, val unlocked: Boolean)
@@ -47,6 +53,8 @@ data class ProfileUiState(
     val hapticsEnabled: Boolean = true,
     val clipboardDetectionEnabled: Boolean = false,
     val isPro: Boolean = false,
+    /** True while the HIGH SCORES card renders — the button says so rather than going dead. */
+    val isPreparingShare: Boolean = false,
 )
 
 @HiltViewModel
@@ -56,6 +64,7 @@ class ProfileViewModel @Inject constructor(
     private val gameDao: GameDao,
     private val drawDao: DrawDao,
     private val userPreferencesRepository: UserPreferencesRepository,
+    private val renderer: ShareCardRenderer,
     billingRepository: com.mikhilnaika.continueapp.core.billing.BillingRepository,
 ) : ViewModel() {
 
@@ -72,6 +81,11 @@ class ProfileViewModel @Inject constructor(
                     name = game?.name ?: "",
                     coverUrl = game?.coverUrl,
                     verdict = ranking.verdict,
+                    hours = Playtime.estimateHours(
+                        game?.playtimeHoursHastily,
+                        game?.playtimeHoursNormally,
+                        game?.playtimeHoursCompletely,
+                    ),
                 )
             }
             _state.update { it.copy(highScores = entries) }
@@ -93,6 +107,35 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             loadThisYear()
             refreshTrophies()
+        }
+    }
+
+    /**
+     * HIGH SCORES as an arcade high-score table — docs/02-PRODUCT-SPEC.md §6, the card whose
+     * whole job is to be argued with.
+     *
+     * Capped at ten rows because that is what an arcade leaderboard is, and because a
+     * screenshot of forty games is a spreadsheet nobody reads.
+     */
+    fun shareHighScores() {
+        val current = _state.value
+        if (current.highScores.isEmpty() || current.isPreparingShare) return
+        _state.update { it.copy(isPreparingShare = true) }
+        viewModelScope.launch {
+            try {
+                val card = renderer.renderHighScoresCard(
+                    current.highScores.take(HIGH_SCORE_CARD_ROWS).map {
+                        HighScoreLine(name = it.name, hours = it.hours)
+                    }
+                )
+                renderer.share(
+                    bitmap = card,
+                    fileName = "high_scores",
+                    message = ShareLinks.messageForHighScores(current.highScores.firstOrNull()?.name),
+                )
+            } finally {
+                _state.update { it.copy(isPreparingShare = false) }
+            }
         }
     }
 
@@ -194,4 +237,9 @@ class ProfileViewModel @Inject constructor(
 
     fun setHapticsEnabled(enabled: Boolean) = viewModelScope.launch { userPreferencesRepository.setHapticsEnabled(enabled) }
     fun setClipboardDetectionEnabled(enabled: Boolean) = viewModelScope.launch { userPreferencesRepository.setClipboardDetectionEnabled(enabled) }
+
+    private companion object {
+        /** An arcade leaderboard is ten rows. Anything longer stops being one. */
+        const val HIGH_SCORE_CARD_ROWS = 10
+    }
 }

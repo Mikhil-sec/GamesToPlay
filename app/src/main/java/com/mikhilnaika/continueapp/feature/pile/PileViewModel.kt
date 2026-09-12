@@ -9,6 +9,8 @@ import com.mikhilnaika.continueapp.core.data.UserPreferencesRepository
 import com.mikhilnaika.continueapp.core.data.clearRewardKey
 import com.mikhilnaika.continueapp.core.data.dao.PileDao
 import com.mikhilnaika.continueapp.core.data.dao.RankingDao
+import com.mikhilnaika.continueapp.core.share.ShareLauncher
+import com.mikhilnaika.continueapp.core.share.ShareLinks
 import com.mikhilnaika.continueapp.core.data.dao.StackDao
 import com.mikhilnaika.continueapp.core.data.entity.PileEntryEntity
 import com.mikhilnaika.continueapp.core.util.GameFacet
@@ -34,7 +36,25 @@ class PileViewModel @Inject constructor(
     private val rankingDao: RankingDao,
     private val billingRepository: BillingRepository,
     private val userPreferencesRepository: UserPreferencesRepository,
+    private val shareLauncher: ShareLauncher,
 ) : ViewModel() {
+
+    /**
+     * Recommend one game to a friend.
+     *
+     * Text, not a rendered card, and that is the interesting choice. The link is an Android
+     * App Link served by the Worker, so WhatsApp/Discord/iMessage fetch it and unfurl it into a
+     * preview card carrying the game's real key art — the artwork arrives without us drawing or
+     * uploading anything, and the *recipient* gets something tappable rather than a JPEG of a
+     * recommendation. Tapping it opens CONTINUE? straight onto that game, or the store if they
+     * don't have it yet.
+     *
+     * Fires immediately with no coroutine and no render, because the whole point of this
+     * affordance is that it costs nothing to use.
+     */
+    fun shareGame(gameId: Long, gameName: String, campaign: ShareLinks.Campaign) {
+        shareLauncher.shareText(ShareLinks.messageFor(campaign, gameName, gameId))
+    }
 
     private val selectedState = MutableStateFlow(PileState.BACKLOG)
     private val viewMode = MutableStateFlow(PileUiState().viewMode)

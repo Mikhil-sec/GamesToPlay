@@ -107,12 +107,28 @@ fun ProfileScreen(
             ) {
                 SectionHeader("HIGH SCORES")
                 if (state.highScores.isNotEmpty()) {
-                    TextButton(onClick = { editingScores = !editingScores }) {
-                        Text(
-                            text = if (editingScores) "DONE" else "EDIT",
-                            style = ContinueTextStyles.label,
-                            color = ContinueColors.AccentCoin,
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Hidden while editing: mid-reorder is exactly when the leaderboard is
+                        // in a state its owner doesn't yet stand behind.
+                        if (!editingScores) {
+                            TextButton(
+                                onClick = viewModel::shareHighScores,
+                                enabled = !state.isPreparingShare,
+                            ) {
+                                Text(
+                                    text = if (state.isPreparingShare) "…" else "SHARE",
+                                    style = ContinueTextStyles.label,
+                                    color = ContinueColors.AccentNeon,
+                                )
+                            }
+                        }
+                        TextButton(onClick = { editingScores = !editingScores }) {
+                            Text(
+                                text = if (editingScores) "DONE" else "EDIT",
+                                style = ContinueTextStyles.label,
+                                color = ContinueColors.AccentCoin,
+                            )
+                        }
                     }
                 }
             }

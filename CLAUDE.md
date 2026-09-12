@@ -85,6 +85,8 @@ minSdk 26 · targetSdk 36 · Compose BOM latest stable.
 | `docs/10-BUILD-STATUS.md` | **Read first.** What's built, verified, broken, and next |
 | `docs/11-IGDB-PARTNERSHIP.md` | IGDB commercial partnership thread, draft reply, attribution obligations |
 | `docs/12-SECURITY.md` | **Read before touching the Worker, secrets, or `.gitignore`.** Threat model, what's secret vs only looks secret, API abuse controls, audit checklist |
+| `docs/13-STORE-LISTING.md` | Every Play Console field with a prepared answer: listing copy, Data Safety, content rating, tester brief |
+| `docs/14-PRODUCTION-ACCESS.md` | Paste-ready answers for the production-access application, the feedback→fix evidence table, and what must happen before the production release |
 
 ## Working agreements
 

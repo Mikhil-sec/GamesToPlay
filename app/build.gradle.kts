@@ -1,3 +1,4 @@
+import java.net.URI
 import java.util.Properties
 
 plugins {
@@ -15,6 +16,27 @@ val localProperties = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }
 fun localProp(key: String, default: String): String = localProperties.getProperty(key) ?: default
+
+/**
+ * The Worker's hostname, for the Android App Links intent filter.
+ *
+ * Derived from `WORKER_BASE_URL` rather than written out a second time, because a manifest
+ * `<data android:host>` that disagrees with the host the app actually builds share links for
+ * fails in the most annoying way available: links open a browser, and *nothing reports an
+ * error* — App Links verification has no user-visible failure mode. One source of truth is
+ * the only defence. The manifest can't read `BuildConfig`, hence the placeholder.
+ */
+val shareLinkHost: String = URI(
+    localProp("WORKER_BASE_URL", "https://continue-worker.example.workers.dev")
+).host ?: "continue-worker.example.workers.dev"
+
+/**
+ * The public Play listing. Hardcoded to the release `applicationId` on purpose: a debug build
+ * carries an `applicationIdSuffix` of `.debug`, so deriving this from `BuildConfig
+ * .APPLICATION_ID` would put a store URL for an app that doesn't exist into every share a
+ * developer sends from a debug build.
+ */
+val playStoreUrl = "https://play.google.com/store/apps/details?id=com.mikhilnaika.continueapp"
 
 // key.properties -> release signing. Never commit key.properties (see key.properties.example).
 val keystoreProperties = Properties().apply {
@@ -43,6 +65,11 @@ android {
             "String", "WORKER_BASE_URL",
             "\"${localProp("WORKER_BASE_URL", "https://continue-worker.example.workers.dev")}\""
         )
+        // The friend loop — see core/share/ShareLinks.kt and worker/src/routes/gameLink.ts.
+        buildConfigField("String", "SHARE_LINK_HOST", "\"$shareLinkHost\"")
+        buildConfigField("String", "PLAY_STORE_URL", "\"$playStoreUrl\"")
+        manifestPlaceholders["shareLinkHost"] = shareLinkHost
+
         buildConfigField(
             "String", "ADMOB_APP_ID",
             "\"${localProp("ADMOB_APP_ID", "ca-app-pub-3940256099942544~3347511713")}\""

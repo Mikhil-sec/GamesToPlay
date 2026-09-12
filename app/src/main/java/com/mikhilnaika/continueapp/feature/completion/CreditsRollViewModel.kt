@@ -8,7 +8,11 @@ import com.mikhilnaika.continueapp.core.data.PileState
 import com.mikhilnaika.continueapp.core.data.clearRewardKey
 import com.mikhilnaika.continueapp.core.data.dao.GameDao
 import com.mikhilnaika.continueapp.core.data.dao.PileDao
+import com.mikhilnaika.continueapp.core.data.dao.RankingDao
 import com.mikhilnaika.continueapp.core.network.GameDataSource
+import com.mikhilnaika.continueapp.core.share.ShareCardRenderer
+import com.mikhilnaika.continueapp.core.share.ShareLinks
+import com.mikhilnaika.continueapp.core.util.Playtime
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,6 +46,10 @@ data class CreditsRollUiState(
      * comment on [CreditsRollViewModel].
      */
     val coinsAwarded: Int = 0,
+    /** Position on HIGH SCORES, if this game has been ranked. Null otherwise. */
+    val allTimeRank: Int? = null,
+    /** True while the CLEARED card is rendering, so the button can say so instead of nothing. */
+    val isPreparingShare: Boolean = false,
 )
 
 @HiltViewModel
@@ -51,7 +59,13 @@ class CreditsRollViewModel @Inject constructor(
     private val gameDao: GameDao,
     private val gameDataSource: GameDataSource,
     private val billingRepository: BillingRepository,
+    private val rankingDao: RankingDao,
+    private val renderer: ShareCardRenderer,
 ) : ViewModel() {
+
+    /** Held so [shareClear] doesn't re-read Room for art it already had. */
+    private var coverUrl: String? = null
+    private var estimatedHours: Int? = null
 
     private val entryId: Long = checkNotNull(savedStateHandle["entryId"])
 
@@ -101,6 +115,23 @@ class CreditsRollViewModel @Inject constructor(
             val ordinal = pileDao.countCompletedSince(yearStart).coerceAtLeast(1)
             val dateFormat = SimpleDateFormat("d MMM yyyy", Locale.getDefault())
 
+            coverUrl = game?.coverUrl
+            // The user's own logged hours beat the crowdsourced estimate whenever they exist —
+            // a card that says "38 HOURS" about *your* clear should mean your 38 hours.
+            estimatedHours = entry.hoursPlayed?.takeIf { it > 0f }?.toInt()
+                ?: Playtime.estimateHours(
+                    game?.playtimeHoursHastily,
+                    game?.playtimeHoursNormally,
+                    game?.playtimeHoursCompletely,
+                )
+            // `getAll` is ordered by position, so the index is the rank. Absent from the list
+            // simply means "not ranked yet", which is the common case right after a clear —
+            // the card then just omits the line rather than inventing a position.
+            val rank = rankingDao.getAll()
+                .indexOfFirst { it.gameId == entry.gameId }
+                .takeIf { it >= 0 }
+                ?.plus(1)
+
             _state.update {
                 it.copy(
                     isLoading = false,
@@ -112,10 +143,53 @@ class CreditsRollViewModel @Inject constructor(
                     finishedLabel = dateFormat.format(Date(finishedAt)),
                     clearOrdinal = ordinal,
                     coinsAwarded = awarded,
+                    allTimeRank = rank,
                 )
             }
 
             if (game != null && game.backgroundUrl == null) backfillKeyArt(game.id)
+        }
+    }
+
+    /**
+     * Renders the CLEARED card and opens the chooser.
+     *
+     * This screen is where a share button always belonged and never was. The one share surface
+     * the app had was THE PILE — a card about how much you *haven't* finished — reachable only
+     * from a button on the pile screen. The moment somebody rolls credits on a game they've
+     * been carrying for two years is the moment they want to tell someone, and until now the
+     * app said nothing and offered nothing.
+     *
+     * Rendering happens on demand rather than up front: it decodes key art, and most Credits
+     * Rolls are watched and dismissed without a share.
+     */
+    fun shareClear() {
+        val current = _state.value
+        if (current.isLoading || current.isPreparingShare) return
+        _state.update { it.copy(isPreparingShare = true) }
+        viewModelScope.launch {
+            try {
+                val card = renderer.renderClearedCard(
+                    gameName = current.gameName,
+                    keyArtUrl = current.backgroundUrl,
+                    coverUrl = coverUrl,
+                    hours = estimatedHours,
+                    allTimeRank = current.allTimeRank,
+                )
+                renderer.share(
+                    bitmap = card,
+                    fileName = "cleared_${current.gameId}",
+                    message = ShareLinks.messageFor(
+                        ShareLinks.Campaign.CLEARED,
+                        current.gameName,
+                        current.gameId,
+                    ),
+                )
+            } finally {
+                // In a `finally` so a failed render or a missing chooser can't strand the
+                // button in its disabled state for the life of the screen.
+                _state.update { it.copy(isPreparingShare = false) }
+            }
         }
     }
 

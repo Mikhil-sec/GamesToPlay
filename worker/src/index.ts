@@ -6,6 +6,7 @@ import { LiveTwitchAuthClient } from "./twitch/TwitchAuthClient.ts";
 import { resolveGame } from "./resolve/resolveGame.ts";
 import { getSteamOwnedGames } from "./routes/steamOwned.ts";
 import { spendCoins } from "./routes/coinsSpend.ts";
+import { assetLinksBody, gameLinkResponse, sanitizeCampaign } from "./routes/gameLink.ts";
 import {
   checkRateLimits,
   MAX_BATCH_IDS,
@@ -55,6 +56,28 @@ export default {
     const provider = selectProvider(env);
 
     try {
+      /**
+       * Digital Asset Links — answered before anything else, including rate limiting.
+       *
+       * This is a static constant served from memory: no IGDB call, no KV read, nothing worth
+       * rationing. More importantly, the clients are Android's install-time verifier and
+       * Google's crawler rather than our app, and a 429 to *them* doesn't slow an attacker
+       * down — it silently un-verifies the App Links for whoever was installing, and every
+       * shared game link starts opening a browser instead of the app with nothing anywhere
+       * reporting an error. Exempt on purpose; see routes/gameLink.ts.
+       */
+      if (url.pathname === "/.well-known/assetlinks.json") {
+        return new Response(JSON.stringify(assetLinksBody()), {
+          headers: {
+            "Content-Type": "application/json",
+            "X-Content-Type-Options": "nosniff",
+            // Android re-verifies on install and on update. A stale copy at the edge is
+            // exactly how a fingerprint correction fails to take effect.
+            "Cache-Control": "no-store",
+          },
+        });
+      }
+
       // Rate limiting runs before routing, so an unknown path costs an attacker the same
       // budget as a real one and can't be used to probe for free. `/health` is exempt only in
       // its shallow form — the `?deep=1` variant spends a real IGDB request, so it's gated
@@ -182,6 +205,22 @@ export default {
         const id = Number(detailMatch[1]);
         const game = await cached(env, `detail:${id}`, CacheTtl.DETAIL, () => provider.detail(id));
         return game ? json(game) : json({ error: "NOT_FOUND" }, 404);
+      }
+
+      /**
+       * The friend-loop landing page — `/g/<igdbId>`, optionally `?c=pick|dare|cleared`.
+       *
+       * Same `\d{1,9}` bound and the same `detail:<id>` cache key as `/games/<id>` above, so a
+       * share link for an already-seen game costs nothing at all. `canonicalUrl` is rebuilt
+       * from our own path rather than echoing `request.url`, which would put any query string
+       * an attacker appended into the page's `og:url` and `<link rel=canonical>`.
+       */
+      const shareMatch = url.pathname.match(/^\/g\/(\d{1,9})$/);
+      if (shareMatch && request.method === "GET") {
+        const id = Number(shareMatch[1]);
+        const campaign = sanitizeCampaign(url.searchParams.get("c"));
+        const canonical = `${url.origin}/g/${id}`;
+        return await gameLinkResponse(env, provider, id, campaign, canonical);
       }
 
       if (url.pathname === "/resolve" && request.method === "POST") {

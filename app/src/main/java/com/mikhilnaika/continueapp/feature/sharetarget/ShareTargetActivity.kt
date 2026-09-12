@@ -48,6 +48,7 @@ import com.mikhilnaika.continueapp.core.design.ContinueShapes
 import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
 import com.mikhilnaika.continueapp.core.design.ContinueTheme
 import com.mikhilnaika.continueapp.core.network.dto.ResolveCandidateDto
+import com.mikhilnaika.continueapp.core.share.ShareLinks
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
@@ -90,6 +91,29 @@ class ShareTargetActivity : ComponentActivity() {
                     else -> viewModel.resolveText(null, subject)
                 }
             }
+
+            /**
+             * The friend loop — a `https://<worker>/g/<id>` App Link, or the
+             * `continueapp://g/<id>` fallback the landing page fires.
+             *
+             * This is the one entry point that arrives already knowing *exactly* which game it
+             * means, so it skips resolution entirely. Everything else about the sheet is
+             * shared: same layout, same add path, same "added to your pile" confirmation.
+             *
+             * A link we can't read is deliberately not an error — [ShareLinks.parseGameId]
+             * returns null and we fall through to the ordinary text path, which lands on
+             * manual entry with the URL stripped. A truncated or mangled link therefore still
+             * leaves the user somewhere useful instead of on a dead sheet.
+             */
+            Intent.ACTION_VIEW -> {
+                val gameId = ShareLinks.parseGameId(intent.data)
+                if (gameId != null) {
+                    viewModel.resolveGameId(gameId)
+                } else {
+                    viewModel.resolveText(intent.dataString, null)
+                }
+            }
+
             else -> viewModel.resolveText(null, null)
         }
     }
@@ -164,6 +188,10 @@ private fun ShareSheet(viewModel: ShareTargetViewModel, onDismiss: () -> Unit) {
                     onSearch = viewModel::searchManually,
                 )
                 is ShareResolutionState.Added -> AddedConfirmation(gameName = current.gameName, onDismiss = onDismiss)
+                is ShareResolutionState.AlreadyInPile -> AlreadyInPileNotice(
+                    gameName = current.gameName,
+                    onDismiss = onDismiss,
+                )
             }
         }
     }
@@ -242,6 +270,30 @@ private fun ManualEntryField(prefill: String, note: String?, onSearch: (String) 
             Text("SEARCH")
         }
     }
+}
+
+/**
+ * Deliberately *not* auto-dismissing, unlike [AddedConfirmation].
+ *
+ * "Added" is a confirmation of something the user asked for, so it can get out of the way on
+ * its own. "You already have this" is new information they didn't ask for and might want to
+ * act on — so it waits to be dismissed rather than flashing past.
+ */
+@Composable
+private fun AlreadyInPileNotice(gameName: String, onDismiss: () -> Unit) {
+    Text(
+        text = "$gameName is already on your pile",
+        style = ContinueTextStyles.titleM,
+        color = ContinueColors.AccentCoin,
+    )
+    androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 6.dp))
+    Text(
+        text = "Great minds. Nothing to do here.",
+        style = ContinueTextStyles.body,
+        color = ContinueColors.TextSecondary,
+    )
+    androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 12.dp))
+    Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("DONE") }
 }
 
 @Composable

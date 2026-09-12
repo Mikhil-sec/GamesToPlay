@@ -5,7 +5,19 @@
 > what's next. Update it whenever you finish a chunk of work or discover something that
 > changes this picture — don't let it go stale like a comment nobody re-reads.
 >
-> Last updated: 2026-08-28 — **the fourth closed-test feedback round, and the biggest one**:
+> Last updated: **2026-09-12** — **production access is GRANTED**, and **SHARE was rebuilt around
+> a friend loop**: a shared game is now a real Android App Link that unfurls with key art in
+> WhatsApp/Discord and opens straight into the app. Three properly designed cards replace the one
+> Roboto-on-a-rectangle card, the Credits Roll finally has a share button, and the fake
+> `continue.app/pile` URL is gone. **166 app tests + 65 worker tests, 0 failures.** 🔴 One
+> blocking input: the **Play App Signing SHA-256**, needed before the Worker is deployed — see
+> the 2026-09-12 entry and `docs/09-PENDING-INPUTS.md`.
+>
+> Previous entry: **2026-09-07** — see the 2026-09-07 entry immediately below. No code changed;
+> what changed is that **`versionCode 8` reached the Closed track and came back clean**, and the
+> production-access application is drafted.
+>
+> Previous entry: 2026-08-28 — **the fourth closed-test feedback round, and the biggest one**:
 > ten tester items plus one of Mikhil's own, all eleven addressed. Headlines: the **HAPTICS
 > setting had never been wired to anything** (five screens each built their own `Haptics`); the
 > **clear-a-game coin reward was an unbounded faucet** (clear → back to THE PILE → clear again);
@@ -79,6 +91,265 @@
 > RevenueCat, which shows real customer records tagged `0.2.0` and `0.3.0`. Only *Closed*
 > testing has stayed on `versionCode 4` throughout; Internal testing has been iterated on the
 > whole time. "Never uploaded" below refers only to the Closed track.
+
+---
+
+## 2026-09-12 — production access granted, and SHARE was rebuilt around a friend loop
+
+**Production track access is granted.** The Play gate that has been the project's top schedule
+risk since day one is behind us, and attention moves from *can we ship* to *is it good*.
+
+The first thing looked at with that freedom was **SHARE**, which Mikhil correctly named as the
+weakest feature in the app. It was worse than "unimpressive" — most of it had never been built,
+and the part that had been built was broken in a way nobody had noticed.
+
+### What SHARE actually was, before today
+
+`docs/02-PRODUCT-SPEC.md` §6 specifies **five** cards (CLEARED, HIGH SCORE, THE PILE, THE STACK,
+YEAR IN GAMES) plus card themes as the primary cosmetic coin sink. What existed:
+
+- **One card.** THE PILE. Reachable from exactly one button, on the pile screen.
+- **It rendered in Roboto.** `ShareCardRenderer` was an `object`, so it had no `Context`, so it
+  could not reach `R.font.chakrapetch_bold` and could not decode a single piece of key art. The
+  most-screenshotted artifact the app produces was flat text on a flat rectangle, in a typeface
+  used nowhere else in the app. For a Design Award entry that is the wrong thing to get wrong.
+- **The link printed on it was fake.** `continue.app/pile` is a domain nobody has ever
+  registered. Every card ever shared from this app carried a dead URL.
+- **The intent carried no text.** `ACTION_SEND` with `EXTRA_STREAM` and nothing else — no
+  `EXTRA_TEXT`, no Play link. So the "growth loop" in the spec was a PNG with a fake link
+  painted into the pixels and no way for a recipient to act on it.
+- **The Credits Roll had no share button.** The single moment a person most wants to tell
+  someone — credits rolling on a game they've carried for two years — offered nothing.
+- **Nothing was actionable between friends.** Every card was a one-way broadcast image.
+
+The asymmetry worth naming: `ShareTargetActivity` already did the *hard* half — catch a shared
+link, resolve it to a game, add it to the pile. The app could receive from TikTok but could not
+send to another CONTINUE? user. There was no `VIEW` intent filter in the manifest at all.
+
+### The friend loop
+
+A game shared from CONTINUE? is now a real link that a friend's phone knows what to do with.
+
+**Worker — `worker/src/routes/gameLink.ts`, two new routes:**
+
+- **`GET /g/<igdbId>`**, optionally `?c=pick|dare|cleared`. A self-contained HTML landing page
+  with Open Graph tags, so the link **unfurls in WhatsApp/Discord/iMessage with the game's real
+  key art** — the artwork arrives without us drawing, uploading or hosting anything. No external
+  CSS, no JS, no web fonts: an unfurl is fetched by a bot on someone else's infrastructure with
+  its own timeout, and a page needing a second round trip is a page that sometimes unfurls blank.
+- **`GET /.well-known/assetlinks.json`** — Digital Asset Links, so Android will hand `/g/*` URLs
+  straight to the app. Answered **before rate limiting**, deliberately: the clients are Android's
+  install-time verifier and Google's crawler, and 429-ing *them* doesn't slow an attacker down,
+  it silently un-verifies App Links for whoever was installing.
+
+**Cost: effectively zero.** `/g/<id>` reuses the **same `detail:<id>` KV key** as `GET
+/games/<id>`, so a share link for a game anyone has already opened costs **no KV write at all** —
+which matters because KV writes (1,000/day) are the binding quota in the whole stack.
+
+**App:**
+
+- `ShareTargetActivity` gained an `autoVerify` App Links filter for `https://<worker>/g/*` and a
+  `continueapp://g/<id>` fallback. It lands on the **share sheet**, not MainActivity, so the
+  friend loop inherits the entire existing degradation ladder instead of growing a second one.
+- `ShareTargetViewModel.resolveGameId()` skips resolution entirely — a link minted by CONTINUE?
+  already names its game. It checks **Room first and the network second**, the reverse of the
+  obvious order, because the most likely place to tap a friend's link is a group chat on the bus.
+- `core/share/ShareLinks.kt` is the single place that builds *and* parses these links. That is a
+  security boundary, not a formatting helper: the https form is exported to the whole internet
+  and the custom scheme can be fired by any app on the device. **15 tests**, mostly about what it
+  refuses — other hosts, `http`, suffix hosts like `<host>.evil.example`, ids past the Worker's
+  own `\d{1,9}` bound.
+
+### The cards are now actually designed
+
+`ShareCardRenderer` is a `@Singleton` with a `Context` and Coil's **shared** `ImageLoader` — the
+app's existing one, from `ContinueApplication`'s 192 MB disk cache, so a cover the pile just
+displayed renders into a card **instantly and offline**. Three cards at 1080×1350:
+
+- **CLEARED** — key art bleeding from the top edge and dissolving into the background, cover
+  thumbnail, title (shrunk a step at a time before it's allowed to wrap), hours, all-time rank.
+  **Shared from the Credits Roll**, where a share button always belonged.
+- **THE PILE** — a 4×4 **wall of box art** from the backlog, longest games first, washed down
+  under the headline. The count is abstract; a wall of games you own and haven't finished is the
+  joke landing.
+- **HIGH SCORES** — an actual arcade high-score table in JetBrains Mono, `1ST`/`2ND`/`3RD` in
+  coin/white/hot. Shared from the HIGH SCORES header, hidden while editing.
+
+All three carry Chakra Petch, arcade corner brackets, and a CRT scanline pass drawn **last, over
+everything** so the card reads as one screen rather than a texture on part of one.
+
+### One owner for every outbound intent
+
+New `core/share/ShareLauncher.kt` owns every `ACTION_SEND` in the app. Same lesson as the HAPTICS
+bug: *a rule enforced at the call sites holds only at the call sites somebody remembered.* The
+rule here is **every share carries a real, tappable link**, and routing all of it through one
+class makes a link-less share something you'd have to go out of your way to write. It also fixes
+a silent bug — `ClipData` is now set alongside `EXTRA_STREAM`, without which a handful of target
+apps receive a share with no image at all and no error.
+
+Recommending a game from the pile's long-press menu (**RECOMMEND IT** / **DARE THEM TO FINISH
+IT**) is deliberately a **text** share, not a rendered card: the link's own unfurl supplies the
+artwork, it fires instantly with no render, and the recipient gets something *tappable* rather
+than a JPEG of a recommendation.
+
+### Also fixed along the way
+
+The share sheet used to say **"added to your pile" for a game that was already there** — the
+duplicate check existed and correctly skipped the insert, it just never told anyone. There's now
+an `AlreadyInPile` rung that says so and, unlike the "added" confirmation, doesn't auto-dismiss:
+"added" confirms something you asked for, "you already have this" is new information.
+
+### Verification
+
+**166 app unit tests, 0 failures** (was 150). **65 Worker tests, 0 failures** (was 50).
+`tsc --noEmit` clean. The landing page was rendered and inspected as real HTML, not just tested.
+
+⚠️ **Nothing in this round has been on a device.** Same standing caveat as 2026-08-28.
+
+### 🔴 The one blocking input: the Play App Signing SHA-256
+
+`assetlinks.json` ships the **upload key** and the **debug key** fingerprints, both read locally
+from the keystores. The third — **Play App Signing** — cannot be read from this machine, because
+Google re-signs every upload with its own key, and *that* is the certificate real users' installs
+carry. Read it from **Play Console → Test and release → Setup → App integrity → App signing key
+certificate → SHA-256**.
+
+Until it's filled in, shared links still *work* — they open the landing page and the Play listing
+— they just don't open the app for anyone who installed from Play.
+
+Two things about this that are easy to get wrong:
+
+1. **The failure is silent.** Wrong fingerprint → Android opens a browser → nothing logs
+   anything, anywhere. That is why `worker/test/gameLink.test.ts` carries a `PENDING:` test that
+   currently asserts the placeholder is still there: when the real value lands the test goes red
+   and you flip `false` to `true`. A red test is a far more reliable reminder than a TODO.
+2. **Order matters.** The Worker must be deployed with the correct fingerprint *before* an app
+   build carrying `autoVerify` is installed, because Android verifies at **install time**.
+
+### Not done, and deliberately
+
+- **The Worker is not deployed.** Held so it goes out once, with the real fingerprint, in the
+  right order. Deploy with `npx wrangler deploy` from `worker/`.
+- **Card themes** — the specced cosmetic coin sink (`HOLOGRAPHIC FOIL`, `ARCADE MARQUEE`, `NEON
+  NOIR`) — still don't exist, so coins still have no cosmetic sink. Now much cheaper to build
+  than it was this morning: the renderer has a palette and a chrome pass to vary.
+- **THE STACK** and **YEAR IN GAMES** cards remain unbuilt.
+
+---
+
+## 2026-09-07 — the gate is passed, and the fourth round came back clean
+
+No code changed this session. What changed is the state of the world, and it resolves the
+largest open warning in this document.
+
+**`versionCode 8` is on the Closed track and has run there roughly five days.** The 2026-08-28
+entry below is stamped, correctly, with "nothing in this round has been on a device" — `adb
+devices` was empty for that whole session. That warning is now **discharged, by testers rather
+than by a cable**. The feedback that came back contained **no bugs and no defects**: only
+suggestions for features that were already on the later-work list.
+
+That is a meaningful result and worth stating plainly, because the two rounds before it each
+hid a phone-only layout break the tablet absorbed. The specific things flagged as highest-risk
+on 2026-08-28 — the brand-new **STATS** screen, the first use of Material 3's `DatePicker` in
+this app, **PILE's rebuilt three-group filter section** (the exact shape of both previous
+breaks), **DRAW's GENRE dial** and **HIGH SCORES edit mode** — have all now rendered on real
+phones without a report. The haptics toggle likewise: it was the loudest complaint of the
+previous round and nobody raised it again.
+
+**What this does not cover:** no tester completed a paid transaction, so the purchase flow is
+still unexercised end to end on a real Play account. Everything else about the paywall — its
+layout, its copy, the CTA fixed on 2026-08-26 — has been seen.
+
+**Track state — and a correction.** The Closed track ran **`4` → `6` → `7` → `8`**. Entries
+above this one say `versionCode 7` was "never uploaded to any track"; **that is wrong** and has
+been corrected here and in `docs/09-PENDING-INPUTS.md`. Mikhil confirms it went to Closed, and
+RevenueCat corroborates it independently: Google's pre-launch device farm minted `0.7.0`
+installs on 2026-08-26 (06:31–07:10 UTC) and `0.8.0` installs on 2026-08-28 (18:54–19:27 UTC),
+and the farm only runs on upload. **Four builds reached testers during the closed test, one per
+feedback round** — the single most useful fact for the production-access form.
+
+**The 14-day gate is passed.** Clock started 2026-08-19; earliest apply date was 2026-09-02;
+today is 2026-09-07, 19 days in.
+
+### Reading the tester population out of RevenueCat
+
+Mikhil's estimate was ~15 (Play Console exposes no live opted-in count, only the met/not-met
+bar). The RevenueCat records support something firmer. Applying the device-farm signature from
+the 2026-08-19 entry — Android API **30** exactly, `first_seen_at` equal to `last_seen_at` to the
+millisecond, US/BR, clustered on upload days — removes **48 of the 78** customer records and
+leaves 30 real installs. Of those:
+
+- **21 are on `0.8.0` and were last seen between 2026-09-03 and 2026-09-07**, one of them within
+  the hour.
+- **No non-farm install has a `first_seen_at` later than 2026-08-21.** This is the load-bearing
+  observation: a reinstall mints a *fresh* anonymous id, so churn would show up as September
+  first-seens. There are none. Every currently-active install has been continuously present
+  since 19–21 August, ~18 days.
+- One of the 21 (`first_seen` 2026-08-12, pre-dating the closed test) is Mikhil's own device.
+
+This is install-level evidence, not Play's opt-in metric, so it doesn't *prove* the opt-in count
+— but it corroborates "comfortably above 12, continuously, for well over 14 days" far better
+than an estimate does.
+
+### Testers did complete purchases — and the billing integration is proven
+
+The 2026-08-28 warning that the purchase flow was unexercised is **wrong as of this session**.
+Sampling 6 active testers found **5 with completed transactions**, all `store: play_store`,
+all `environment: sandbox` (Play licence-tester cards — no real money):
+
+- **Four bought the one-time lifetime upgrade** (`prodbf1ac2c0d6`) on 19–20 Aug — three MU, one
+  MY. Each shows the `pro` entitlement **active**, so the entitlement gate is confirmed working
+  end to end against a genuine Play transaction, not a fake.
+- **One bought the monthly subscription** (`prodb3fdae1092`) **five separate times across 20–25
+  Aug**. Sandbox subscriptions expire in minutes, so that's a tester deliberately re-running the
+  flow on five different days.
+
+⚠️ **The sandbox revenue figures are artefacts** ($9.99, $19.95, $27.93 — the last one for a
+"monthly" sub). Never quote them, in the Play form or on Devpost. Same standing rule as the
+customer count.
+
+### The Play service account was already configured — the docs were stale
+
+`docs/09-PENDING-INPUTS.md` listed "Play Console → RevenueCat service account" as **Not
+started**. It is done: `validate-app-credentials` on `app28ef647c38` returns `status: valid`
+with all three checks passing (validate subscription purchases · read the in-app product
+catalogue · read the subscription catalogue and base plans). The traffic said so first — those
+tester purchases carry real `GPA.…` order ids and correct expiry tracking, which RevenueCat
+cannot produce without the credential. Another instance of the standing lesson: **verify config
+with traffic, not with what a doc claims about it.**
+
+### The production-access application is drafted
+
+**`docs/14-PRODUCTION-ACCESS.md`** — paste-ready answers to every question Google's own support
+page says the form asks, plus a pre-submit checklist, an evidence table of all ~21 tester
+reports and what shipped for each, and the ordered list of what must happen before the
+production *release* (as distinct from the application). **Not yet submitted.**
+
+Three things worth carrying out of writing it:
+
+1. **Applying is not publishing.** The form unlocks the production track; it releases nothing.
+   So the outstanding EEA/UK/CH exclusion — decided 2026-08-24, still not done — blocks the
+   production rollout, not the application. Doing it *now* would be actively harmful: country
+   availability is per track, and excluding a country a current tester lives in drops them and
+   restarts their 14 days, mid-review.
+2. **The engagement question has a truthful answer that is also a strong one.** The worry
+   recorded on 2026-08-24 was that 2-3 minutes a day reads as thin usage. It only reads that way
+   if you assume session length is the metric. For a backlog manager it inverts: the app exists
+   to stop people scrolling lists instead of playing, so a user who stays inside it for forty
+   minutes is a *failure* case. That argument is in §2 of the new doc and it needs no spin.
+3. **Do not put RevenueCat's numbers anywhere near this form.** It currently reports 77 new
+   customers and 77 active users over 28 days. The app configures `Purchases` with no
+   `appUserID`, so a "customer" is an anonymous install — every reinstall mints another — and
+   the figure also absorbs Google's pre-launch device farm. Quoting 77 alongside "~15 testers"
+   invites the one question you don't want a reviewer asking. Same standing rule as the Devpost
+   writeup; see the 2026-08-19 entry on reading RevenueCat.
+
+**Timeline.** Review is "usually 7 days or less". Submitting 2026-09-07 puts a decision around
+2026-09-14, leaving ~2 weeks for the production release and its own separate review before the
+2026-09-30 deadline. Workable, with no room for a second attempt. The hedge in
+`docs/01-PLAY-STORE-CRITICAL-PATH.md` still stands: an **open testing** track produces a public
+Play URL without production access, and is worth switching to if the review is still pending
+around 2026-09-15.
 
 ---
 
@@ -359,8 +630,11 @@ metadata, and `trending?page=9` clamps to page 2 rather than erroring or paging 
 - `./gradlew bundleRelease` — **`versionCode 8` / `0.8.0` built and signed** at
   `app/build/outputs/bundle/release/app-release.aab` (32.8 MB, `jarsigner -verify` clean, signer
   cert valid to 2056). `versionName` read back **out of the bundle's own manifest**, not trusted
-  from the Gradle file. Supersedes `versionCode 7`, which was built 2026-08-26 and never uploaded
-  anywhere; the Closed track is still on `versionCode 6`.
+  from the Gradle file. Supersedes `versionCode 7`, built 2026-08-26; the Closed track is still
+  on `versionCode 6` **at the time of writing**.
+  > **Corrected 2026-09-07:** both halves of that last sentence went out of date immediately.
+  > `versionCode 7` *was* uploaded to the Closed track, and `8` followed it the same evening.
+  > The Closed track ran `4` → `6` → `7` → `8`. See the 2026-09-07 entry.
 
 ### NOT verified — read this before assuming anything works
 

@@ -158,6 +158,15 @@ fun CreditsRollScreen(
                     androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = ContinueSpacing.XL.dp))
                     ArcadeButton(text = "RANK IT ▸", onClick = { onRankIt(state.gameId) })
                     androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = ContinueSpacing.SM.dp))
+                    // Secondary to RANK IT on purpose: ranking feeds HIGH SCORES, which is
+                    // what makes the *next* share worth posting. Bragging comes after filing.
+                    ArcadeButton(
+                        text = if (state.isPreparingShare) "PREPARING…" else "SHARE THIS CLEAR",
+                        onClick = viewModel::shareClear,
+                        accent = ContinueColors.AccentNeon,
+                        enabled = !state.isPreparingShare,
+                    )
+                    androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = ContinueSpacing.SM.dp))
                     Text(
                         text = "SKIP",
                         style = ContinueTextStyles.label,

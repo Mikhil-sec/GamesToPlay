@@ -300,6 +300,17 @@ Declare exactly these five, and nothing else:
 the invite and installed on the matching Google account*; invited-but-not-installed counts for
 nothing, and the count dropping below 12 puts the 14-day clock at risk.
 
+> **What actually happened (recorded 2026-09-07): the Google Group was not used.** Mikhil added
+> each tester's Gmail address individually to the closed test's email list, which made following
+> up with people by name easier. The Group steps below are still sound advice for a larger test,
+> but **don't describe the process as Group-based** in the production-access application or
+> anywhere else — see `docs/14-PRODUCTION-ACCESS.md`.
+>
+> **Also learned the hard way:** the Play Store's "send feedback to developer" option allows each
+> tester **one** submission, with a character limit. Testers had more to say than it could carry,
+> so feedback after that first submission was collected through an **anonymous Google Form**.
+> Plan that overflow channel up front next time.
+
 ### Create the Google Group (once, 5 minutes)
 
 1. [groups.google.com](https://groups.google.com) → **Create group**.
