@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -46,6 +47,7 @@ import com.mikhilnaika.continueapp.core.design.ContinueSpacing
 import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
 import com.mikhilnaika.continueapp.core.ui.EmptyState
 import com.mikhilnaika.continueapp.core.ui.IgdbAttribution
+import com.mikhilnaika.continueapp.core.util.findActivity
 
 /** YOU tab — docs/02-PRODUCT-SPEC.md §7. */
 @Composable
@@ -56,6 +58,7 @@ fun ProfileScreen(
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
 
     // Reordering is a mode rather than always-on controls: three extra buttons per row would
     // turn a leaderboard into a toolbar, and the list is read far more often than it is edited.
@@ -195,6 +198,17 @@ fun ProfileScreen(
                 checked = state.clipboardDetectionEnabled,
                 onCheckedChange = viewModel::setClipboardDetectionEnabled,
             )
+            // Only where Google actually collected consent — see ProfileUiState. A row that
+            // opens an empty form is worse than no row, and the repo rule is that every
+            // settings row says what it does, which you cannot write for a dead one.
+            if (state.privacyOptionsRequired) {
+                SettingsActionRow(
+                    label = "AD PRIVACY CHOICES",
+                    description = "Change what you agreed to when you first opened the app. " +
+                        "Turning consent off means no rewarded ads — everything else keeps working.",
+                    onClick = { context.findActivity()?.let(viewModel::showPrivacyOptions) },
+                )
+            }
         }
 
         item { IgdbAttribution() }
@@ -397,6 +411,31 @@ private fun TrophyChip(trophy: Trophy) {
  * cheapest guard against the next one: it is hard to write "what this does" for a switch that
  * does nothing.
  */
+/**
+ * A settings row that performs an action rather than holding a state.
+ *
+ * Shares [SettingsToggleRow]'s shape on purpose — same label, same required one-line
+ * description, same rhythm — so the settings list reads as one list rather than a toggle
+ * section with a stray button in it.
+ */
+@Composable
+private fun SettingsActionRow(label: String, description: String, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = ContinueSpacing.MD.dp),
+    ) {
+        Text(text = label, style = ContinueTextStyles.label, color = ContinueColors.AccentCoin)
+        Text(
+            text = description,
+            style = ContinueTextStyles.label,
+            color = ContinueColors.TextTertiary,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+    }
+}
+
 @Composable
 private fun SettingsToggleRow(
     label: String,

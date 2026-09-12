@@ -33,13 +33,32 @@ private class AdMobLoadedAd(val rewardedAd: RewardedAd) : LoadedAd
 @Singleton
 class RealAdRepository @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val consentManager: ConsentManager,
 ) : AdRepository {
 
     override suspend fun loadCoinAd(): LoadedAd? = loadRewarded(BuildConfig.ADMOB_UNIT_COIN)
 
     override suspend fun loadFreePlayAd(): LoadedAd? = loadRewarded(BuildConfig.ADMOB_UNIT_FREE_PLAY)
 
-    private suspend fun loadRewarded(adUnitId: String): LoadedAd? = suspendCancellableCoroutine { cont ->
+    /**
+     * The consent gate, and the only one.
+     *
+     * It sits here rather than at the two call sites (DRAW's coin earn and the FREE PLAY
+     * gate) because a rule enforced at call sites is enforced only at the call sites somebody
+     * remembered — the lesson this codebase learned from a HAPTICS toggle that controlled
+     * nothing for weeks. A third ad surface added later inherits this automatically; it cannot
+     * forget to ask.
+     *
+     * Returning null on refusal is already a state every caller handles, since it is what a
+     * no-fill looks like — and a no-fill is exactly what an un-consented ad request *is* from
+     * the user's point of view: no ad, no coin, nothing else different.
+     */
+    private suspend fun loadRewarded(adUnitId: String): LoadedAd? {
+        if (!consentManager.canRequestAds()) return null
+        return loadRewardedUnchecked(adUnitId)
+    }
+
+    private suspend fun loadRewardedUnchecked(adUnitId: String): LoadedAd? = suspendCancellableCoroutine { cont ->
         RewardedAd.load(
             context,
             adUnitId,

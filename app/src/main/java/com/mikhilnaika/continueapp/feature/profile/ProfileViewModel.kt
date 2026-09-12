@@ -2,6 +2,8 @@ package com.mikhilnaika.continueapp.feature.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.app.Activity
+import com.mikhilnaika.continueapp.core.ads.ConsentManager
 import com.mikhilnaika.continueapp.core.data.PileState
 import com.mikhilnaika.continueapp.core.data.TimeBudget
 import com.mikhilnaika.continueapp.core.data.UserPreferencesRepository
@@ -55,6 +57,14 @@ data class ProfileUiState(
     val isPro: Boolean = false,
     /** True while the HIGH SCORES card renders — the button says so rather than going dead. */
     val isPreparingShare: Boolean = false,
+    /**
+     * Whether to show the "AD PRIVACY CHOICES" row.
+     *
+     * False for most users — Google only requires the entry point where consent was actually
+     * collected, so a user in Mauritius would otherwise get a settings row that opens an empty
+     * form. It follows the SDK's own answer rather than a guess at the user's geography.
+     */
+    val privacyOptionsRequired: Boolean = false,
 )
 
 @HiltViewModel
@@ -65,6 +75,7 @@ class ProfileViewModel @Inject constructor(
     private val drawDao: DrawDao,
     private val userPreferencesRepository: UserPreferencesRepository,
     private val renderer: ShareCardRenderer,
+    private val consentManager: ConsentManager,
     billingRepository: com.mikhilnaika.continueapp.core.billing.BillingRepository,
 ) : ViewModel() {
 
@@ -102,6 +113,10 @@ class ProfileViewModel @Inject constructor(
 
         billingRepository.isPro
             .onEach { pro -> _state.update { it.copy(isPro = pro) } }
+            .launchIn(viewModelScope)
+
+        consentManager.privacyOptionsRequired
+            .onEach { required -> _state.update { it.copy(privacyOptionsRequired = required) } }
             .launchIn(viewModelScope)
 
         viewModelScope.launch {
@@ -234,6 +249,15 @@ class ProfileViewModel @Inject constructor(
         rankingDao.deleteByGameId(gameId)
         rankingDao.reorder(PairwiseRanker.withoutGame(current, gameId))
     }
+
+    /**
+     * Reopens Google's consent form so a user can change an answer they already gave.
+     *
+     * Required, not a courtesy: an app that collects consent in the EEA/UK/CH without offering
+     * a persistent way to withdraw it is non-compliant with Google's own policy, however
+     * correct the original dialog was.
+     */
+    fun showPrivacyOptions(activity: Activity) = consentManager.showPrivacyOptionsForm(activity)
 
     fun setHapticsEnabled(enabled: Boolean) = viewModelScope.launch { userPreferencesRepository.setHapticsEnabled(enabled) }
     fun setClipboardDetectionEnabled(enabled: Boolean) = viewModelScope.launch { userPreferencesRepository.setClipboardDetectionEnabled(enabled) }

@@ -5,7 +5,11 @@
 > what's next. Update it whenever you finish a chunk of work or discover something that
 > changes this picture — don't let it go stale like a comment nobody re-reads.
 >
-> Last updated: **2026-09-12** (second entry same day) — **`versionCode 9` / `0.9.0` is built
+> Last updated: **2026-09-12** (third entry same day) — **the EEA/UK/CH exclusion is REVERSED**;
+> a real UMP consent flow ships instead, so the app goes to **all countries**. `versionCode 10` /
+> `0.10.0` built. 🔴 Inert until a **GDPR message is published in the AdMob console**.
+>
+> Earlier: **2026-09-12** (second entry same day) — **`versionCode 9` / `0.9.0` is built
 > and signed** with the real Play App Signing fingerprint in place; clear reward cut +5→+1; a live
 > privacy-policy inaccuracy about IGDB's image CDN fixed; IGDB credits now on six screens.
 > 🔴 **The Worker still needs `npx wrangler deploy` before that build is installed.**
@@ -96,6 +100,62 @@
 > RevenueCat, which shows real customer records tagged `0.2.0` and `0.3.0`. Only *Closed*
 > testing has stayed on `versionCode 4` throughout; Internal testing has been iterated on the
 > whole time. "Never uploaded" below refers only to the Closed track.
+
+---
+
+## 2026-09-12 (third) — the EEA exclusion is reversed; a real consent flow ships instead
+
+**`versionCode 10` / `0.10.0`.** The plan of record since 2026-08-24 was to exclude the EEA, UK
+and Switzerland — 32 countries — from Play availability rather than build a consent flow. That
+is now **reversed**. Ship to everywhere.
+
+**Why the August decision no longer holds.** It was made when production access was a distant
+maybe and the only thing that mattered was not disturbing the closed test; exclusion was the
+cheap way to sidestep the work. Two things changed:
+
+1. **It can lock a judge out.** Three of the four target categories are judged by someone
+   opening the Play listing. A judge anywhere in those 32 countries sees *"not available in
+   your country"* — not a weak app, **no app**.
+2. **It contradicts the Catvertising thesis.** The entire advertising pitch is that CONTINUE?
+   treats ads more respectfully than everyone else — no interstitials, every ad user-initiated
+   with a stated exchange. "We removed a third of the developed world rather than show a
+   dialog" is the opposite of that, and it's the category's own judge who would notice.
+
+**What shipped** — `core/ads/ConsentManager.kt`, on `com.google.android.ump:user-messaging-platform:4.0.0`:
+
+- `requestConsentInfoUpdate()` on **every** launch from `MainActivity`, not once — consent
+  status changes server-side when vendor lists or policies do, so a one-time check drifts out
+  of compliance silently. Fired before `setContent` and never awaited: a compliance check has
+  no business on the cold-start path.
+- **The gate lives inside `RealAdRepository.loadRewarded`**, not at the two call sites. Fourth
+  time this codebase has applied that rule and the reasoning is identical to the HAPTICS bug: a
+  rule enforced at call sites is enforced only where somebody remembered. A third ad surface
+  added later inherits the check because there is no other way to obtain an ad. Refusal returns
+  `null`, which every caller already handles — it is what a no-fill looks like, and an
+  un-consented request *is* a no-fill from the user's side.
+- **Fails closed.** `canRequestAds()` is false until the check completes, so an ad requested too
+  early is simply not loaded rather than loaded on the assumption consent probably isn't needed.
+- **"AD PRIVACY CHOICES" in YOU**, shown only where `privacyOptionsRequirementStatus` is
+  `REQUIRED`. Google's policy requires a persistent way to withdraw consent; a row that opens an
+  empty form for a user in Mauritius would be worse than no row.
+- **Debug builds force `DEBUG_GEOGRAPHY_EEA`.** Without it the flow is untestable from Mauritius
+  — every local run would exercise the one path that does nothing and the branch that matters
+  would ship having never executed once.
+
+**Declining costs a European user nothing they can't get elsewhere.** Pile, DRAW, RANK, sharing
+and offline are untouched; they simply aren't offered the watch-an-ad-for-a-coin exchange, and
+coins are still earned by clearing games or bought outright. Privacy policy §5 updated to say so
+— it had been written deliberately *not* to claim a consent flow existed, and now one does.
+
+🔴 **The code is inert until a GDPR message is published in the AdMob console.** If no message
+exists, no form can be shown, consent is never obtained and `canRequestAds()` stays false — so
+European users get no rewarded ads. Safe direction, still broken. See `docs/09-PENDING-INPUTS.md`.
+Publishing is server-side and fixes the shipped build with no new release.
+
+**Verified:** `jarsigner -verify` clean; release manifest `versionCode="10"` / `0.10.0`; UMP
+present in the R8 mapping (11 classes) and `ConsentManager` survived minification as `v5.i`.
+**166 app tests + 66 worker tests, 0 failures.** ⚠️ The consent form itself has **not** been seen
+on a device — that needs a debug build and the AdMob message published.
 
 ---
 

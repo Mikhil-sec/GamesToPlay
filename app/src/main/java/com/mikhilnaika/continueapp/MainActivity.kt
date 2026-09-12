@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.mikhilnaika.continueapp.core.ads.ConsentManager
 import com.mikhilnaika.continueapp.core.data.UserPreferencesRepository
 import com.mikhilnaika.continueapp.core.design.ContinueTheme
 import com.mikhilnaika.continueapp.core.ui.LocalHaptics
@@ -50,9 +51,24 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var haptics: Haptics
 
+    /**
+     * Google requires the consent status to be refreshed on **every** launch, not once — it
+     * can change server-side when a vendor list or policy changes, so a one-time check would
+     * drift out of compliance silently.
+     */
+    @Inject
+    lateinit var consentManager: ConsentManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Fired before setContent and deliberately not awaited. Outside the EEA/UK/CH this
+        // shows nothing at all; inside it, Google's form appears over the app once. Either
+        // way the pile must not wait on it — a compliance check has no business sitting on
+        // the cold-start path (docs/05-TECH-ARCHITECTURE.md: cold start < 1.5s), and every
+        // part of the app except the ad surfaces works regardless of the answer.
+        consentManager.requestConsentInfo(this)
 
         setContent {
             val onboardingComplete by viewModel.onboardingComplete.collectAsStateWithLifecycle()
