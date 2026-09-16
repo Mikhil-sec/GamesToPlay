@@ -31,11 +31,17 @@ import javax.inject.Singleton
  * nothing for weeks, the farmable clear reward, the share target's stub writes); this is the
  * same shape and gets the same treatment.
  *
- * **Nothing outside advertising depends on it.** A user who declines gets the whole app: the
- * pile, DRAW, RANK, sharing and offline all work untouched. They simply aren't offered the
- * watch-an-ad-for-a-coin exchange, which is an *optional* way to earn a coin, not the only
- * one — clearing a game still pays and coins can still be bought. Declining costs a European
- * user nothing they can't get another way.
+ * **What [canRequestAds] actually means — this is easy to get wrong.** It reports whether the
+ * consent flow has *completed*, **not** what the user decided: it returns `true` after a
+ * "do not consent" just as it does after a "consent". So this class gates on *timing*, not on
+ * approval, and a user who declines still gets ads — Google serves **non-personalised** ones,
+ * driven by the TCF consent signal the UMP form writes, which the Mobile Ads SDK reads on its
+ * own. Do not "fix" this by treating a false result as a refusal; false only ever means the
+ * check has not finished, which is exactly the moment it is unsafe to request anything.
+ *
+ * **Nothing outside advertising depends on it.** Declining costs a European user nothing: the
+ * pile, DRAW, RANK, sharing and offline are untouched, rewarded ads are still available (just
+ * non-personalised), and coins are still earned by clearing games or bought outright.
  */
 @Singleton
 class ConsentManager @Inject constructor(
