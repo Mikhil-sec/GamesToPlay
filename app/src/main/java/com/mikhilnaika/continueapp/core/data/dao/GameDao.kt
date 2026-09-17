@@ -28,9 +28,10 @@ interface GameDao {
      * Games the user actually holds whose cached row predates [epochMillis] — the refresh
      * queue for [com.mikhilnaika.continueapp.core.data.GameCacheRepository].
      *
-     * Scoped to `pile_entries` on purpose. The `games` table also holds 426 bundled seed rows
-     * and everything DISCOVER has ever shown, none of which is worth spending a request on;
-     * only a game in someone's pile is one they'll actually look at. Seed ids are negative by
+     * Scoped to `pile_entries` and friends' piles on purpose. The `games` table also holds 426
+     * bundled seed rows and everything DISCOVER has ever shown, none of which is worth spending a
+     * request on; only a game in a pile — yours or a friend's — is one you'll actually look at.
+     * Your own pile goes first, so a large friend list can never starve it. Seed ids are negative by
      * construction and can never resolve against IGDB, so they're excluded here rather than
      * being re-requested and re-failing every launch.
      *
@@ -40,9 +41,12 @@ interface GameDao {
     @Query(
         """
         SELECT g.id FROM games g
-        INNER JOIN pile_entries e ON e.gameId = g.id
-        WHERE g.id > 0 AND g.cachedAt < :epochMillis
-        ORDER BY g.cachedAt ASC
+        WHERE g.id > 0 AND g.cachedAt < :epochMillis AND (
+            g.id IN (SELECT gameId FROM pile_entries)
+            OR g.id IN (SELECT gameId FROM friend_games)
+            OR g.id IN (SELECT gameId FROM friend_ranks)
+        )
+        ORDER BY (g.id IN (SELECT gameId FROM pile_entries)) DESC, g.cachedAt ASC
         LIMIT :limit
         """
     )
@@ -57,6 +61,13 @@ interface GameDao {
      */
     @Query("UPDATE games SET backgroundUrl = :backgroundUrl WHERE id = :id")
     suspend fun updateBackgroundUrl(id: Long, backgroundUrl: String?)
+
+    @Query("SELECT id FROM games WHERE id IN (:ids)")
+    suspend fun existingIds(ids: List<Long>): List<Long>
+
+    /** Placeholder rows only — never replaces a row that's already there. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIfAbsent(games: List<GameEntity>)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(game: GameEntity)

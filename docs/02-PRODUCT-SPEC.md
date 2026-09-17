@@ -2,7 +2,8 @@
 
 ## Navigation
 
-Bottom bar, 4 destinations, with DRAW as a raised arcade button in the centre:
+Bottom bar, 4 destinations plus DRAW as a raised arcade button in the centre (FRIENDS added in
+`versionCode 11`, which also made the bar symmetric — two either side of DRAW):
 
 ```
 ┌──────────────────────────────────────────────┐
@@ -10,7 +11,7 @@ Bottom bar, 4 destinations, with DRAW as a raised arcade button in the centre:
 │                 (content)                    │
 │                                              │
 ├──────────────────────────────────────────────┤
-│   PILE      DISCOVER   ⬤DRAW⬤   YOU          │
+│  PILE   DISCOVER   ⬤DRAW⬤   FRIENDS   YOU    │
 └──────────────────────────────────────────────┘
 ```
 
@@ -441,6 +442,47 @@ fire `ACTION_SEND` (`image/png`). Each carries a small `CONTINUE?` wordmark and 
 | **THE PILE** | "412 HOURS. 87 GAMES. SEND HELP." with the time-budget bar | Self-deprecating, universally relatable — the viral one |
 | **THE STACK** | A curated stack as a shareable list | Recommendation flex |
 | **YEAR IN GAMES** | Wrapped-style annual recap (Pro) | Seasonal spike |
+
+### FRIENDS — following a friend's pile (built 2026-09-17, `versionCode 11`)
+
+The friend loop's second half. A game link says "play this"; a **pile link** says "here's
+everything I'm into" — and a friend with CONTINUE? taps it and follows that pile from a FRIENDS
+tab.
+
+**Constraint that shaped all of it: no accounts, no server-side user data** (the privacy policy
+and the Play Data Safety form both promise this). So:
+
+- **The pile rides inside the link**, in the URL fragment: `https://<worker>/p#<payload>`.
+  Browsers never send a fragment to a server, so the Worker only ever sees a request for `/p`
+  and serves the same static page to everyone. Payload: game ids + state per game, top-50 ranking,
+  share time, a sequence number and a public key — about two bytes a game, ~300 characters for a
+  typical pile, capped at 400 games (~2,000 chars) with real totals kept for the rest.
+- **Not live — it updates when the friend shares again.** Tapping a newer link from the same
+  person updates their pile in place and says what changed ("3 new · 1 newly cleared").
+- **Signed.** Each phone creates a random ECDSA P-256 key the first time it shares. Only a link
+  signed by the same key can update a friend, and only with a higher sequence number — so
+  nobody in a group chat can overwrite "Sam's pile", and replaying an old link does nothing. The
+  key is tied to nothing, never sent to us, excluded from backups, and resettable (FRIENDS →
+  *Start a fresh share link*).
+- **Nothing is saved without a tap.** A new key opens a sheet showing the pile's numbers and
+  covers, and asks "What do you call them?". The name stays on the recipient's phone.
+- **New phone?** A reinstalled friend shares with a new key; the sheet offers *update a friend
+  you already follow* so they keep their name and place.
+
+Screens:
+
+| Surface | What it does |
+|---|---|
+| **SHARE YOUR PILE** (from PILE's share icon and FRIENDS) | THE PILE card + a signed follow link, with a plain note saying the link lists every game |
+| **Import sheet** (`FriendImportActivity`) | Transparent sheet over the chat app: preview → name → saved; or updated / already current / older / "that's your pile" / "this link didn't come through whole" |
+| **FRIENDS tab** | Each friend: avatar, totals, "shared 3 days ago", cover strip. Long-press to rename/remove |
+| **Friend's pile** | NOW PLAYING · THE PILE · CLEARED · HIGH SCORES · RETIRED · WANTED, an IN COMMON count, "YOU HAVE IT" marks, tap a game to add it to your own pile |
+
+Names come from the bundled offline index first (so a pile opened on the bus reads as games),
+then full details from the Worker's `/games/batch` — which writes nothing to KV.
+
+**Deliberately excluded:** HIGH SCORES and CLEARED shares do **not** carry the pile link. Only
+the SHARE YOUR PILE screen, which says what the link contains, may send a whole game list.
 
 **Themes** are the primary cosmetic coin sink: `CRT` and `CARTRIDGE` free; `HOLOGRAPHIC
 FOIL`, `ARCADE MARQUEE`, `NEON NOIR`, `CRT DECAY` cost 25 coins or a rewarded ad for a

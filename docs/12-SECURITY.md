@@ -148,7 +148,7 @@ any outbound fetch.
 |---|---|
 | `usesCleartextTraffic="false"` | ✅ Added 2026-08-12 (explicit, though targetSdk 36 defaults this off) |
 | R8 minify + resource shrink on release | ✅ Enabled |
-| `exported="true"` activities | ✅ Only MainActivity (launcher) and ShareTargetActivity (share target) — both require it |
+| `exported="true"` activities | ✅ MainActivity (launcher), ShareTargetActivity (share target + `/g/` links) and FriendImportActivity (`/p` pile links) — all three require it. MainActivity's one extra, `OPEN_FRIEND_ID`, can only choose which screen opens |
 | `FileProvider` | ✅ `exported="false"`, scoped paths |
 | Backup rules | ✅ Only the pile DB. DataStore is **not** backed up, so backup/restore can't duplicate coins |
 | Secrets in the APK | ✅ None beyond values that are public by design (§2) |
@@ -160,6 +160,30 @@ secret key). Clearing app data resets the balance. This is an accepted, document
 not an oversight; the fix is AdMob **server-side verification**, which needs real ad units,
 which needs a production Play listing. Entitlements (`pro`) are unaffected — those are
 RevenueCat-authoritative and verified server-side.
+
+## 6b. Pile links (FRIENDS) — added 2026-09-17
+
+A pile link is the first input in this app that is *data to be stored*, arriving from anywhere
+on the internet (and, via `continueapp://p/…`, from any app on the device). Threats and controls:
+
+| Threat | Control |
+|---|---|
+| Someone in a group chat forges an update to "Sam's pile" | Every link is ECDSA P-256 signed; an update is applied only if it verifies against the key already stored for that friend (`PileSnapshotCodec`, `FriendRepository.inspect`) |
+| Replaying an old link to roll a friend's pile back | Monotonic `sequence` per key; not-greater is reported as "already current" / "you have a newer copy" and changes nothing |
+| Signature reuse from another context | Signed bytes are prefixed with a fixed domain string that never travels |
+| Swapping in a different public key | The key is inside the signed bytes; flipping any byte fails (a test flips every byte) |
+| Malformed / hostile payloads (huge counts, duplicate ids, over-long varints, trailing bytes, truncation) | Strict decoder: ≤ 4,096 chars, URL-safe base64 only, every length bounded before use, ids in `1..999,999,999` and strictly ascending, no id in two states, ≤ 400 games, ≤ 50 ranked, input consumed exactly, P-256 on-curve check. No decompression, so no decompression bomb. 20+ tests |
+| Auto-import / tapjacking a friend in | A new key is never saved without the user typing a name and tapping ADD |
+| Storage exhaustion | ≤ 100 friends; names ≤ 24 code points |
+| Names that lie about themselves | Control and format characters (bidi overrides, zero-width) stripped; cut on code-point boundaries |
+| A malicious pile turning the app into an IGDB amplifier | Fill-in fetches go through `/games/batch` (zero KV writes), max 10 batches, sequential, 750 ms apart, and each id is requested at most once per 10 minutes, so bogus ids can't cause a request per screen visit |
+| Worker learning who follows whom | The pile is in the URL fragment; `/p` is a static page, identical for every visitor, with no parameters read |
+| XSS on the `/p` landing page | The page never writes the fragment into the DOM; the script validates it against `[A-Za-z0-9_-]` and uses it only in an `intent://` href. CSP: `default-src 'none'` + the script's own sha256. Tests run the script against hostile fragments |
+| Rate limits blanking link previews | `/p` is served before rate limiting (static, no IGDB, no KV) — same reasoning as `assetlinks.json` |
+
+**Privacy note:** the public key is a pseudonymous identifier that links one person's shares to
+each other *for the people they sent them to*. It is random, never sent to us, not backed up,
+and resettable. The share screen tells the sender the link lists every game in their pile.
 
 ## 7. Known gaps — accepted, with reasons
 
@@ -173,6 +197,8 @@ These are deliberate, not missed. Revisit if the threat picture changes.
 - **Coin balance is client-side** (§6).
 - **`/coins/spend` and `/steam/owned` are 501** pending secrets — they fail closed, which is
   the safe direction.
+- **A pile link is readable by anyone it's forwarded to.** By design — it's a share. The
+  sender is told on screen; the key can be reset to stop future updates reaching old holders.
 - **No alerting on quota burn.** Worth adding a Cloudflare notification for Workers/KV usage
   before judging, so an attack or a viral spike is noticed rather than discovered.
 
@@ -187,4 +213,5 @@ Run before any push to the public repo, and after any change to bindings or endp
 - [ ] New outbound fetch of a user-supplied URL: uses `hostMatches()`, https-only
 - [ ] No new unbounded `Promise.all` over user-controlled collections
 - [ ] `npx wrangler deploy` output **lists every expected binding**
-- [ ] `cd worker && npm test` (28 tests) and `npx tsc --noEmit` clean
+- [ ] `cd worker && npm test` (75 tests as of 2026-09-17) and `npx tsc --noEmit` clean
+- [ ] Anything that decodes link-borne data: bounded before use, signature-checked, never stored without a user tap

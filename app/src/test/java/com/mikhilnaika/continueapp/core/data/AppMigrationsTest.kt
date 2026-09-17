@@ -1,5 +1,10 @@
 package com.mikhilnaika.continueapp.core.data
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -83,4 +88,27 @@ class AppMigrationsTest {
             versions,
         )
     }
+
+    /**
+     * The migration must build exactly the tables Room expects, or Room refuses to open the
+     * database — for upgrading users only, since a fresh install never runs the migration.
+     * So the SQL is checked against Room's own export, not against itself.
+     */
+    @Test
+    fun `migration 1 to 2 builds the friend tables exactly as Room generates them`() {
+        val v1 = File(schemaDir, "1.json").readText()
+        val v2 = Json.parseToJsonElement(File(schemaDir, "2.json").readText()).jsonObject
+        val entities = v2.getValue("database").jsonObject.getValue("entities").jsonArray.map { it.jsonObject }
+        val added = entities.filter { "\"${it.string("tableName")}\"" !in v1 }
+        assertEquals(setOf("friends", "friend_games", "friend_ranks"), added.map { it.string("tableName") }.toSet())
+
+        val expected = added.flatMap { entity ->
+            val table = entity.string("tableName")
+            val indices = entity["indices"]?.jsonArray.orEmpty().map { it.jsonObject.string("createSql") }
+            (listOf(entity.string("createSql")) + indices).map { it.replace("\${TABLE_NAME}", table) }
+        }
+        assertEquals(expected.toSet(), AppMigrations.MIGRATION_1_2_SQL.toSet())
+    }
+
+    private fun JsonObject.string(key: String): String = getValue(key).jsonPrimitive.content
 }

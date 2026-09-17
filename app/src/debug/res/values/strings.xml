@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Debug installs alongside the Play build (applicationIdSuffix ".debug") with the same
+         icon; a distinct label is the only way to tell which one you just opened. -->
+    <string name="app_name">CONTINUE? DEBUG</string>
+</resources>

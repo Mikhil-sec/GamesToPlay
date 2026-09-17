@@ -278,6 +278,24 @@ already declared under in-app search history.
 - **Play's "shared" column means shared with a third party by us.** A user handing their own
   card to WhatsApp is the user sharing, not the app, exactly as with any screenshot.
 
+**FRIENDS (versionCode 11, 2026-09-17) adds no new Data Safety declarations either.** Checked
+field by field, because it moves a whole game list between phones:
+
+- **Sender:** the pile link is built and signed on-device and handed to Android's share sheet;
+  the app makes no network call to share. The only new value in it that isn't game data is a
+  random public key generated on the phone — not a device ID, not an advertising ID, never sent
+  to us. User-initiated transfer via the share sheet is Play's own example of *not* "sharing".
+- **Our server:** the pile sits in the URL fragment, which browsers don't transmit. `/p` is a
+  static page identical for every visitor. We receive nothing new.
+- **Recipient:** the friend's name they type is stored only on their phone. Fetching details for
+  a friend's games is the same "a game's numeric ID" request already declared under in-app search
+  history / app functionality, with no identifier attached.
+- **Nothing changes in "Do you provide a way to delete data"**: friends are removed in-app, and
+  all of it is local.
+
+The privacy policy gained §3b describing exactly this — **push `docs/privacy.html` before
+submitting versionCode 11**, so the live policy matches the build under review.
+
 ⚠️ **One thing that was wrong and is now fixed, unrelated to sharing.** The privacy policy §6
 claimed *"Requests to IGDB are made by our server, never by your device directly, so IGDB never
 sees your IP address."* That is true of IGDB's **data API** and false of its **image CDN** — the
@@ -377,6 +395,26 @@ nothing, and the count dropping below 12 puts the 14-day clock at risk.
 
 ## 12. The release itself
 
+### versionCode 11 / 0.11.0 → Production (2026-09-17)
+
+- **Bundle:** `app/build/outputs/bundle/release/app-release.aab`, signed, `versionCode 11`.
+- **Before uploading:** (1) `npx wrangler deploy` from `worker/` so `/p` exists; (2) push
+  `docs/privacy.html` so §3b is live; (3) keep **all countries** selected — the consent flow
+  is verified on-device, so the EEA/UK/CH exclusion must not come back.
+- **Release name:** `0.11.0 (11)`
+- **Release notes** (en-US, under 500 chars):
+
+```
+New: FRIENDS.
+
+• Share your pile and friends with CONTINUE? can follow it — everything you're playing, cleared and still putting off. Share again and their copy updates.
+• A FRIENDS tab shows every pile shared with you, the games you have in common, and lets you add theirs to yours in one tap.
+• No accounts: the pile travels inside the link itself.
+• Consent prompt for ads in the EEA, UK and Switzerland.
+```
+
+### Original closed-test release (2026-08-19), kept for reference
+
 - **Track:** Closed testing (create a track, or use the default one). Not Internal testing —
   internal testing does **not** count towards the 14-day requirement.
 - **Bundle:** `app/build/outputs/bundle/release/app-release.aab`, `versionCode 4` / `0.4.0`,
@@ -401,7 +439,9 @@ Thank you for testing. Bugs and blunt feedback: naikamikhil@gmail.com
 
 ## 13. Known gaps — worth knowing before you tick boxes
 
-1. **No consent management platform (CMP) for EEA/UK users.** Google's EU user consent policy
+1. ✅ **Resolved 2026-09-12, verified on a device 2026-09-17** — the UMP consent flow ships
+   (`core/ads/ConsentManager.kt`) and the AdMob GDPR message is published. Original note:
+   **No consent management platform (CMP) for EEA/UK users.** Google's EU user consent policy
    requires a certified CMP (the `UserMessagingPlatform` SDK) before serving ads to users in
    the EEA, UK or Switzerland. The app doesn't have one — nothing in the codebase references
    `UserMessagingPlatform`. Consequence: ad requests from those regions may be limited or
@@ -410,7 +450,8 @@ Thank you for testing. Bugs and blunt feedback: naikamikhil@gmail.com
    in the EEA/UK, this is the next ads-related thing to build.
 2. **Real AdMob unit IDs won't fill until the app is live.** Expected, not a bug — see
    `docs/09-PENDING-INPUTS.md`.
-3. **The Play service-account JSON still isn't uploaded to RevenueCat.** Without it RevenueCat
+3. ✅ **Resolved — verified 2026-09-07** (`validate-app-credentials` → valid). Original note:
+   **The Play service-account JSON still isn't uploaded to RevenueCat.** Without it RevenueCat
    cannot verify real purchases, so a tester's purchase won't grant an entitlement. Play Console
    → Setup → API access → service account with *Financial data / Manage orders* + *View app
    information* → download JSON → upload in the RevenueCat Android app config. Do it before any

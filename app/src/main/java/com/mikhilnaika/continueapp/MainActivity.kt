@@ -70,15 +70,34 @@ class MainActivity : ComponentActivity() {
         // part of the app except the ad surfaces works regardless of the answer.
         consentManager.requestConsentInfo(this)
 
+        // One-shot: consumed once, and not re-applied after a rotation recreates the Activity.
+        var openFriendId: Long? = if (savedInstanceState == null && intent.hasExtra(EXTRA_OPEN_FRIEND_ID)) {
+            intent.getLongExtra(EXTRA_OPEN_FRIEND_ID, 0L)
+        } else {
+            null
+        }
+
         setContent {
             val onboardingComplete by viewModel.onboardingComplete.collectAsStateWithLifecycle()
             onboardingComplete?.let { complete ->
                 ContinueTheme {
                     CompositionLocalProvider(LocalHaptics provides haptics) {
-                        ContinueNavHost(onboardingComplete = complete)
+                        ContinueNavHost(
+                            onboardingComplete = complete,
+                            openFriendId = openFriendId,
+                            onOpenFriendHandled = { openFriendId = null },
+                        )
                     }
                 }
             }
         }
+    }
+
+    companion object {
+        /**
+         * Set by the friend-link sheet. Only ever carries a local database row id, and is only
+         * used to pick a screen — an app firing it at us can do nothing but open FRIENDS.
+         */
+        const val EXTRA_OPEN_FRIEND_ID = "com.mikhilnaika.continueapp.OPEN_FRIEND_ID"
     }
 }

@@ -100,6 +100,43 @@
             </intent-filter>
         </activity>
 
+        <!-- FRIENDS — where a friend's pile link lands. docs/02-PRODUCT-SPEC.md §6.
+
+             `https://<worker>/p#<payload>`: the whole pile rides in the fragment, which browsers
+             never send to a server, so the Worker only ever sees a request for `/p`. The host is
+             already App Links-verified for `/g/` (verification is per host, not per path), so
+             this opens straight into the sheet on the same installs that `/g/` links do.
+
+             Same transparent-sheet shape as the share target, and for the same reasons: it
+             draws over the chat the link was tapped in, and Back returns there.
+
+             Everything arriving here is untrusted — see PileSnapshotCodec, which verifies the
+             payload's signature and bounds before anything is shown, and FriendRepository,
+             which never saves a new friend without the user naming them. -->
+        <activity
+            android:name=".feature.friends.FriendImportActivity"
+            android:theme="@style/Theme.Continue.Transparent"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:windowSoftInputMode="adjustResize"
+            android:exported="true">
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="${shareLinkHost}" android:path="/p" />
+            </intent-filter>
+
+            <!-- The landing page's fallback for installs where App Links didn't verify. The
+                 payload moves into the path here, because `intent://` URLs reserve `#`. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="continueapp" android:host="p" />
+            </intent-filter>
+        </activity>
+
         <!-- Share card image handoff — docs/02-PRODUCT-SPEC.md §6 "SHARE". -->
         <provider
             android:name="androidx.core.content.FileProvider"

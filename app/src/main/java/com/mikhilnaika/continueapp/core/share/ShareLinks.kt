@@ -107,6 +107,56 @@ object ShareLinks {
     }
 
     /**
+     * The shareable link for a whole pile — the friend loop's second half. See
+     * [com.mikhilnaika.continueapp.core.friends.PileSnapshot].
+     *
+     * The payload goes in the **fragment**, which browsers never transmit: the Worker only ever
+     * sees a request for `/p`, so the game list stays between the two phones and the chat.
+     */
+    fun pileLink(payload: String): String = "https://$host/p#$payload"
+
+    /** The pile payload inside an incoming link, or null if this isn't a pile link of ours. */
+    fun parsePilePayload(uri: Uri?): String? {
+        if (uri == null) return null
+        return parsePilePayload(uri.scheme, uri.host, uri.pathSegments.orEmpty(), uri.encodedFragment)
+    }
+
+    /**
+     * The pure rule behind [parsePilePayload], for the same testability reason as [parseGameId].
+     *
+     * This only decides *where* the payload sits — `https://<host>/p#<payload>` or
+     * `continueapp://p/<payload>` (the landing page's fallback, where `#` is taken by the
+     * `intent://` syntax). Whether the payload is any good is `PileSnapshotCodec.decode`'s
+     * question, and it answers it strictly.
+     */
+    internal fun parsePilePayload(
+        scheme: String?,
+        host: String?,
+        segments: List<String>,
+        fragment: String?,
+    ): String? {
+        val payload = when (scheme?.lowercase()) {
+            "https" -> {
+                if (!host.equals(this.host, ignoreCase = true)) return null
+                if (segments != listOf("p")) return null
+                fragment
+            }
+
+            "continueapp" -> {
+                if (!host.equals("p", ignoreCase = true)) return null
+                if (segments.size != 1) return null
+                segments[0]
+            }
+
+            else -> return null
+        }
+        return payload?.takeIf { it.isNotEmpty() && it.length <= MAX_PILE_PAYLOAD_CHARS }
+    }
+
+    /** Mirrors `PileSnapshotCodec.MAX_PAYLOAD_CHARS`; checked here too so nothing longer is ever passed on. */
+    private const val MAX_PILE_PAYLOAD_CHARS = 4_096
+
+    /**
      * The message body that travels with a shared card.
      *
      * This is the part the old share had none of. `ACTION_SEND` carried an image and nothing
@@ -127,10 +177,13 @@ object ShareLinks {
     /**
      * The message for a card with no single game behind it — THE PILE, HIGH SCORES.
      *
-     * Falls back to the store listing, since there's nothing more specific to deep link to.
+     * THE PILE carries the follow link when there is one, so a friend with CONTINUE? can follow
+     * the pile the card is bragging about; it falls back to the store listing if the link
+     * couldn't be built. HIGH SCORES deliberately never carries it — only the SHARE YOUR PILE
+     * screen, which says on screen what the link contains, may send a user's whole game list.
      */
-    fun messageForPile(totalHours: Int, totalGames: Int): String =
-        "$totalHours hours. $totalGames games. Send help.\n\n$PLAY_STORE_URL"
+    fun messageForPile(totalHours: Int, totalGames: Int, pileLink: String?): String =
+        "$totalHours hours. $totalGames games. Send help.\n\n${followLine(pileLink)}"
 
     fun messageForHighScores(topGameName: String?): String {
         val opener = if (topGameName != null) {
@@ -140,4 +193,7 @@ object ShareLinks {
         }
         return "$opener\n\n$PLAY_STORE_URL"
     }
+
+    private fun followLine(pileLink: String?): String =
+        if (pileLink != null) "Follow my pile on CONTINUE?:\n$pileLink" else PLAY_STORE_URL
 }

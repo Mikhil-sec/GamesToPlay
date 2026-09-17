@@ -2,6 +2,8 @@ package com.mikhilnaika.continueapp.core.ads
 
 import android.app.Activity
 import android.content.Context
+import android.provider.Settings
+import android.util.Log
 import com.google.android.ump.ConsentDebugSettings
 import com.google.android.ump.ConsentInformation
 import com.google.android.ump.ConsentRequestParameters
@@ -10,8 +12,11 @@ import com.mikhilnaika.continueapp.BuildConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private const val TAG = "ConsentManager"
 
 /**
  * Google's User Messaging Platform — the consent flow that makes it legal to serve ads to
@@ -119,19 +124,35 @@ class ConsentManager @Inject constructor(
      * Without this the flow is **untestable from Mauritius** — `requestConsentInfoUpdate`
      * would report that no form is needed and return, so every local run would exercise the
      * one path that does nothing, and the branch that actually matters would ship having never
-     * executed. `addTestDeviceHashedId` takes the hashed id AdMob prints to logcat on the first
-     * run; it is only consulted in debug builds.
+     * executed.
+     *
+     * **Debug geography is ignored unless the device is a registered test device** — Google's
+     * docs: "debug settings only work on test devices". The first version of this function set
+     * the geography and never registered a device, so on real hardware the SDK saw Mauritius and
+     * showed nothing; only emulators (test devices automatically) would ever have seen the form.
+     * The device is now registered by its hashed id, derived the same way the SDK derives the
+     * id it prints to logcat ("Use new ConsentDebugSettings.Builder().addTestDeviceHashedId(…)").
+     * If the form still doesn't appear, compare that logcat id with [debugDeviceHashedId].
      */
     private fun consentParameters(): ConsentRequestParameters {
         val builder = ConsentRequestParameters.Builder()
         if (BuildConfig.DEBUG) {
-            builder.setConsentDebugSettings(
-                ConsentDebugSettings.Builder(context)
-                    .setDebugGeography(ConsentDebugSettings.DebugGeography.DEBUG_GEOGRAPHY_EEA)
-                    .build()
-            )
+            val debugSettings = ConsentDebugSettings.Builder(context)
+                .setDebugGeography(ConsentDebugSettings.DebugGeography.DEBUG_GEOGRAPHY_EEA)
+            debugDeviceHashedId()?.let(debugSettings::addTestDeviceHashedId)
+            builder.setConsentDebugSettings(debugSettings.build())
         }
         return builder.build()
+    }
+
+    /** Upper-case MD5 of `ANDROID_ID` — the id UMP logs for this device. Debug builds only. */
+    private fun debugDeviceHashedId(): String? {
+        val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+            ?: return null
+        val digest = MessageDigest.getInstance("MD5").digest(androidId.toByteArray())
+        val hashed = digest.joinToString("") { "%02X".format(it) }
+        Log.d(TAG, "Registering UMP test device $hashed")
+        return hashed
     }
 
     /** Debug-only: clears the stored decision so the form can be seen again on the next launch. */

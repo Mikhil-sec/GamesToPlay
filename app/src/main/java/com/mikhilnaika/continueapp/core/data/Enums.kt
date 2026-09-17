@@ -15,6 +15,8 @@ enum class AddSource {
     SHARE_TARGET,
     STEAM_IMPORT,
     CLIPBOARD,
+    /** Added from a friend's pile in FRIENDS. Stored as text, so this needed no migration. */
+    FRIEND,
 }
 
 /** docs/02-PRODUCT-SPEC.md §5 — the coarse bucket a ranked game falls into. */

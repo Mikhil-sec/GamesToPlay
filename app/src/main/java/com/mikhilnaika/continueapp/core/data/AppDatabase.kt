@@ -4,11 +4,15 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.mikhilnaika.continueapp.core.data.dao.DrawDao
+import com.mikhilnaika.continueapp.core.data.dao.FriendDao
 import com.mikhilnaika.continueapp.core.data.dao.GameDao
 import com.mikhilnaika.continueapp.core.data.dao.PileDao
 import com.mikhilnaika.continueapp.core.data.dao.RankingDao
 import com.mikhilnaika.continueapp.core.data.dao.StackDao
 import com.mikhilnaika.continueapp.core.data.entity.DrawEntity
+import com.mikhilnaika.continueapp.core.data.entity.FriendEntity
+import com.mikhilnaika.continueapp.core.data.entity.FriendGameEntity
+import com.mikhilnaika.continueapp.core.data.entity.FriendRankEntity
 import com.mikhilnaika.continueapp.core.data.entity.GameEntity
 import com.mikhilnaika.continueapp.core.data.entity.PileEntryEntity
 import com.mikhilnaika.continueapp.core.data.entity.RankingEntity
@@ -27,6 +31,9 @@ import com.mikhilnaika.continueapp.core.data.entity.StackMemberEntity
         StackEntity::class,
         StackMemberEntity::class,
         DrawEntity::class,
+        FriendEntity::class,
+        FriendGameEntity::class,
+        FriendRankEntity::class,
     ],
     // Declared in one place — see DatabaseSchema for why the number and the migrations that
     // service it have to live next to each other.
@@ -40,6 +47,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun rankingDao(): RankingDao
     abstract fun stackDao(): StackDao
     abstract fun drawDao(): DrawDao
+    abstract fun friendDao(): FriendDao
 
     companion object {
         const val DATABASE_NAME = "continue.db"

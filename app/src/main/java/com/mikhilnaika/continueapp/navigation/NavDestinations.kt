@@ -12,7 +12,10 @@ object NavDestinations {
     const val STATS = "stats"
     const val SHARE_PILE = "share/pile"
     const val PAYWALL = "paywall"
+    const val FRIENDS = "friends"
+    const val FRIEND_PILE = "friends/{friendId}"
 
     fun creditsRoll(entryId: Long) = "credits/$entryId"
     fun rank(gameId: Long) = "rank/$gameId"
+    fun friendPile(friendId: Long) = "friends/$friendId"
 }

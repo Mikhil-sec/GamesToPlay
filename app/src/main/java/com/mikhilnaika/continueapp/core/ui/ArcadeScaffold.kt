@@ -36,8 +36,8 @@ data class ArcadeNavItem(
 )
 
 /**
- * The 4-destination bottom bar with DRAW raised in the centre — docs/02-PRODUCT-SPEC.md
- * navigation diagram: PILE · DISCOVER · (DRAW) · YOU.
+ * The bottom bar with DRAW raised in the centre — docs/02-PRODUCT-SPEC.md navigation diagram:
+ * PILE · DISCOVER · (DRAW) · FRIENDS · YOU.
  */
 @Composable
 fun ArcadeScaffold(

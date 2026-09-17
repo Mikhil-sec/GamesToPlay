@@ -120,13 +120,13 @@ class ShareLinksTest {
         val cleared = ShareLinks.messageFor(ShareLinks.Campaign.CLEARED, "Celeste", 7)
         assertTrue(cleared.contains("https://$host/g/7?c=cleared"))
 
-        assertTrue(ShareLinks.messageForPile(412, 87).contains(ShareLinks.PLAY_STORE_URL))
+        assertTrue(ShareLinks.messageForPile(412, 87, pileLink = null).contains(ShareLinks.PLAY_STORE_URL))
         assertTrue(ShareLinks.messageForHighScores("Outer Wilds").contains(ShareLinks.PLAY_STORE_URL))
     }
 
     @Test
     fun `the pile message keeps the numbers it was given`() {
-        val message = ShareLinks.messageForPile(412, 87)
+        val message = ShareLinks.messageForPile(412, 87, pileLink = null)
         assertTrue(message.contains("412 hours"))
         assertTrue(message.contains("87 games"))
     }
@@ -136,6 +136,51 @@ class ShareLinksTest {
         val empty = ShareLinks.messageForHighScores(null)
         assertTrue(empty.contains("top 10"))
         assertTrue(empty.contains(ShareLinks.PLAY_STORE_URL))
+    }
+
+    @Test
+    fun `the pile message carries the follow link when there is one`() {
+        val link = ShareLinks.pileLink("abc_DEF-123")
+        assertEquals("https://$host/p#abc_DEF-123", link)
+        val message = ShareLinks.messageForPile(412, 87, link)
+        assertTrue(message.contains(link))
+        assertTrue(!message.contains(ShareLinks.PLAY_STORE_URL))
+    }
+
+    @Test
+    fun `high scores never carries a pile link`() {
+        // Only SHARE YOUR PILE says on screen that the link lists every game.
+        assertTrue(!ShareLinks.messageForHighScores("Outer Wilds").contains("/p#"))
+    }
+
+    @Test
+    fun `parses the pile link we mint, payload from the fragment`() {
+        assertEquals("abc", ShareLinks.parsePilePayload("https", host, listOf("p"), "abc"))
+    }
+
+    @Test
+    fun `parses the pile custom scheme, payload from the path`() {
+        assertEquals("abc", ShareLinks.parsePilePayload("continueapp", "p", listOf("abc"), null))
+    }
+
+    @Test
+    fun `a pile link anywhere else is not ours`() {
+        assertNull(ShareLinks.parsePilePayload("https", "evil.example", listOf("p"), "abc"))
+        assertNull(ShareLinks.parsePilePayload("https", "$host.evil.example", listOf("p"), "abc"))
+        assertNull(ShareLinks.parsePilePayload("http", host, listOf("p"), "abc"))
+        assertNull(ShareLinks.parsePilePayload("https", host, listOf("p", "x"), "abc"))
+        assertNull(ShareLinks.parsePilePayload("https", host, listOf("g"), "abc"))
+        assertNull(ShareLinks.parsePilePayload("continueapp", "g", listOf("abc"), null))
+        assertNull(ShareLinks.parsePilePayload("continueapp", "p", listOf("a", "b"), null))
+        assertNull(ShareLinks.parsePilePayload("intent", "p", listOf("abc"), null))
+    }
+
+    @Test
+    fun `an empty or oversized pile payload is refused before decoding`() {
+        assertNull(ShareLinks.parsePilePayload("https", host, listOf("p"), null))
+        assertNull(ShareLinks.parsePilePayload("https", host, listOf("p"), ""))
+        assertNull(ShareLinks.parsePilePayload("https", host, listOf("p"), "a".repeat(4_097)))
+        assertEquals(4_096, ShareLinks.parsePilePayload("https", host, listOf("p"), "a".repeat(4_096))?.length)
     }
 
     @Test

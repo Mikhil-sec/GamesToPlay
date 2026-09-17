@@ -5,7 +5,14 @@
 > what's next. Update it whenever you finish a chunk of work or discover something that
 > changes this picture — don't let it go stale like a comment nobody re-reads.
 >
-> Last updated: **2026-09-12** (third entry same day) — **the EEA/UK/CH exclusion is REVERSED**;
+> Last updated: **2026-09-17** — **FRIENDS ships in `versionCode 11` / `0.11.0`**, the intended
+> production release: share your pile as a signed link, and follow friends' piles from a new
+> FRIENDS tab — no accounts, nothing stored server-side. Also: the **consent flow is verified on a
+> device** (after fixing why the debug build never showed it). **203 app tests + 75 Worker tests,
+> 0 failures.** 🔴 Not yet rendered on a device; Worker not yet deployed; privacy policy not yet
+> pushed — see the 2026-09-17 entry.
+>
+> Earlier: **2026-09-12** (third entry same day) — **the EEA/UK/CH exclusion is REVERSED**;
 > a real UMP consent flow ships instead, so the app goes to **all countries**. `versionCode 10` /
 > `0.10.0` built. 🔴 Inert until a **GDPR message is published in the AdMob console**.
 >
@@ -100,6 +107,91 @@
 > RevenueCat, which shows real customer records tagged `0.2.0` and `0.3.0`. Only *Closed*
 > testing has stayed on `versionCode 4` throughout; Internal testing has been iterated on the
 > whole time. "Never uploaded" below refers only to the Closed track.
+
+---
+
+## 2026-09-17 — FRIENDS: follow a friend's pile, with no accounts
+
+**`versionCode 11` / `0.11.0`, signed** (`jarsigner` clean; `versionCode 11`, `FriendImportActivity`
+and the `/p` filter all read back out of the bundle's own manifest). Mikhil will send this build
+straight to the production track.
+
+### First: the consent flow never actually appeared in debug — fixed
+
+Mikhil installed a debug build to check the 09-12 UMP flow and got no form. Cause:
+`ConsentManager` set `DEBUG_GEOGRAPHY_EEA` but never called `addTestDeviceHashedId`, and Google's
+docs are explicit that *"debug settings only work on test devices"*. So on real hardware in
+Mauritius the SDK correctly concluded no form was needed — only an emulator would ever have shown
+it. Debug builds now register the running device by the upper-case MD5 of `ANDROID_ID` (the id UMP
+itself logs). **Verified on Mikhil's device: the form appears.** Release builds are unaffected.
+
+Also: the debug build installs beside the Play build (`.debug` suffix) with an identical icon and
+name, so there was no way to tell which one had been opened. It's now labelled
+**CONTINUE? DEBUG** (`app/src/debug/res/values/strings.xml`).
+
+### The feature
+
+Mikhil's ask: share your pile, a friend taps the link, the app opens with "add friend's pile",
+you name them, and a tab lists every friend's Pile / Now Playing / Cleared / Retired —
+**only if it fits the current privacy promises** (no accounts, no tracking, no new Data Safety
+entries). It does. Design in `docs/02-PRODUCT-SPEC.md` §6 FRIENDS; threat model in
+`docs/12-SECURITY.md` §6b. The decisions worth not re-deriving:
+
+- **The pile rides in the URL fragment** (`/p#<payload>`). Browsers never send fragments, so the
+  Worker's `/p` is a static page, byte-identical for every visitor. The server learns nothing.
+- **Signed with a per-phone random ECDSA P-256 key** (`PileIdentity`, `noBackupFilesDir`, software
+  key — AndroidKeyStore would add device-specific failure modes to protect a read-only game list).
+  Only the same key may update a friend, only with a higher `sequence` — a counter, not the
+  sender's clock, because a phone set a year ahead would otherwise lock itself out forever.
+- **No compression**, on purpose: sorted ids delta-encode to ~2 bytes each anyway, and no inflate
+  step means no decompression bomb. A 12-game pile is a 306-char link; the 400-game cap is ~2,000.
+- **Not live.** Updates arrive when the friend shares again and are applied on tap, with a diff
+  ("3 new · 1 newly cleared · 2 gone"). A new key is never saved without the user naming them.
+- **HIGH SCORES and CLEARED shares deliberately don't carry the pile link.** Only SHARE YOUR PILE,
+  which says on screen that the link lists every game, may send the whole list. (It briefly did
+  carry it from HIGH SCORES during the build; reverted for exactly that reason.)
+- **Friend games get names offline first** — `OfflineGameIndex.lookup(ids)` writes placeholder
+  rows (`cachedAt = 0`), then `/games/batch` fills them in (zero KV writes, ≤10 batches, 750 ms
+  apart, each id at most once per 10 minutes so a link full of bogus ids can't make every screen
+  visit re-request them). The launch-time stale sweep now covers friends' games too, your own
+  pile first.
+- **Room schema 1 → 2** — the first real migration through the lane built on 2026-08-28. Three
+  additive tables (`friends`, `friend_games`, `friend_ranks`), no foreign keys (deletes are one
+  explicit transaction). `AppMigrationsTest` now compares the migration SQL against Room's own
+  exported `2.json`, so the two can't drift.
+- **Bottom bar is now PILE · DISCOVER · (DRAW) · FRIENDS · YOU** — symmetric for the first time.
+  ⚠️ Five columns on a 360dp phone: check the labels on glass (history says the tablet hides this).
+
+New files: `core/friends/{PileSnapshot, PileSnapshotCodec, PileKeys, PileIdentity, FriendRepository}.kt`,
+`core/data/entity/FriendEntity.kt`, `core/data/dao/FriendDao.kt`, `core/util/RelativeTime.kt`,
+`feature/friends/*` (import sheet Activity, FRIENDS tab, friend pile screen),
+`worker/src/routes/pileLink.ts`, `tools/make_pile_link.py`.
+
+### Security review, done as part of the build
+
+Every item is in `docs/12-SECURITY.md` §6b. The two found and fixed *during* review rather than
+designed in up front: the id-retry window above, and a **double Back** on removing a friend from
+their own screen (the remove callback *and* the "friend is gone" effect both navigated, popping
+FRIENDS too).
+
+### Verification
+
+- **203 app unit tests, 0 failures** (was 166): 23 codec tests (round trip, every-byte tamper,
+  key swap, every truncation, crafted duplicate/oversize/over-long-varint payloads, wrong-domain
+  signature, off-curve points), a fixture minted by an **independent Python encoder**
+  (`tools/make_pile_link.py`, `cryptography` library) that must decode exactly, pile-link parsing,
+  name cleaning (bidi overrides, emoji-safe truncation), diffs, relative time, migration-vs-schema.
+- **75 Worker tests, 0 failures** (was 66), `tsc --noEmit` clean — including running the landing
+  page's script against hostile fragments and checking the CSP hash matches the embedded script.
+- ⚠️ **Nothing new has been rendered.** `adb devices` was empty all session.
+
+### 🔴 Before this goes to production
+
+1. `npx wrangler deploy` from `worker/` (the `/p` page). App Links need nothing new.
+2. Push `docs/privacy.html` (new §3b).
+3. Tap-through on a phone — list in `docs/09-PENDING-INPUTS.md`. `python tools/make_pile_link.py`
+   then `adb shell am start -a android.intent.action.VIEW -d "<link>"` exercises the import sheet
+   without a second device; `--key k.pem --seq 2` re-run exercises "updated".
 
 ---
 

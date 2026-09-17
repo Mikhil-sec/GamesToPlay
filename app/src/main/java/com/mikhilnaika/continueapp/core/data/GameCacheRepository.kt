@@ -8,6 +8,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -43,6 +44,7 @@ class GameCacheRepository @Inject constructor(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private val sweptThisProcess = AtomicBoolean(false)
+    private val lastAttempt = java.util.concurrent.ConcurrentHashMap<Long, Long>()
 
     /**
      * Process-scoped, so a hydration outlives the ViewModel that asked for it.
@@ -107,27 +109,86 @@ class GameCacheRepository @Inject constructor(
      */
     suspend fun cacheMinimal(id: Long, name: String, coverUrl: String?) {
         if (gameDao.get(id) != null) return
-        gameDao.upsert(
-            GameEntity(
-                id = id,
-                slug = name.lowercase().replace(Regex("[^a-z0-9]+"), "-"),
-                name = name,
-                coverUrl = coverUrl,
-                backgroundUrl = null,
-                released = null,
-                metacritic = null,
-                rating = null,
-                playtimeHoursHastily = null,
-                playtimeHoursNormally = null,
-                playtimeHoursCompletely = null,
-                genresJson = json.encodeToString(emptyList<String>()),
-                tagsJson = json.encodeToString(emptyList<String>()),
-                platformsJson = json.encodeToString(emptyList<String>()),
-                // Deliberately 0, not `now`: this row is known-incomplete, so it must read as
-                // maximally stale and be first in line for the next sweep.
-                cachedAt = 0L,
-            )
-        )
+        gameDao.upsert(minimalEntity(id, name, coverUrl))
+    }
+
+    private fun minimalEntity(id: Long, name: String, coverUrl: String?): GameEntity = GameEntity(
+        id = id,
+        slug = name.lowercase().replace(Regex("[^a-z0-9]+"), "-"),
+        name = name,
+        coverUrl = coverUrl,
+        backgroundUrl = null,
+        released = null,
+        metacritic = null,
+        rating = null,
+        playtimeHoursHastily = null,
+        playtimeHoursNormally = null,
+        playtimeHoursCompletely = null,
+        genresJson = json.encodeToString(emptyList<String>()),
+        tagsJson = json.encodeToString(emptyList<String>()),
+        platformsJson = json.encodeToString(emptyList<String>()),
+        // Deliberately 0, not `now`: this row is known-incomplete, so it must read as
+        // maximally stale and be first in line for the next sweep.
+        cachedAt = 0L,
+    )
+
+    /**
+     * [cacheMinimal] for many games at once — a friend's pile, named from the offline index.
+     *
+     * Same two rules: an existing row is never touched, and every placeholder is written
+     * maximally stale so [hydrate] and the launch sweep replace it with the real thing.
+     */
+    suspend fun cachePlaceholders(games: List<Placeholder>) {
+        if (games.isEmpty()) return
+        val existing = gameDao.existingIds(games.map { it.id }).toHashSet()
+        val fresh = games.filter { it.id !in existing }
+        if (fresh.isEmpty()) return
+        gameDao.insertIfAbsent(fresh.map { minimalEntity(it.id, it.name, it.coverUrl) })
+    }
+
+    data class Placeholder(val id: Long, val name: String, val coverUrl: String?)
+
+    /**
+     * Fetches full rows for [ids] in Worker-sized batches, one after another.
+     *
+     * Bounded on every axis, because the ids came from a link somebody else wrote: at most
+     * [MAX_HYDRATE_BATCHES] requests (which covers the largest pile a link can carry), strictly
+     * sequential, and spaced out so one import can't turn into a burst against IGDB's 4 req/sec.
+     * The Worker's `/games/batch` writes nothing to KV, so none of this touches the daily
+     * write budget either. Stops at the first failure — offline now means offline for the rest.
+     */
+    suspend fun hydrate(ids: List<Long>) {
+        // Each id is asked for at most once per [RETRY_AFTER_MS]. A friend's link can name ids
+        // IGDB has never heard of; without this, every visit to that friend's screen would
+        // re-request the same unanswerable batch. A window rather than once-per-process, so a
+        // pile imported offline still fills in once signal comes back.
+        val now = System.currentTimeMillis()
+        val wanted = ids.filter { id ->
+            if (id <= 0) return@filter false
+            val last = lastAttempt[id]
+            if (last != null && now - last < RETRY_AFTER_MS) return@filter false
+            lastAttempt[id] = now
+            true
+        }
+        val batches = wanted.chunked(BATCH_LIMIT).take(MAX_HYDRATE_BATCHES)
+        for ((index, batch) in batches.withIndex()) {
+            if (index > 0) delay(HYDRATE_SPACING_MS)
+            val fresh = try {
+                gameDataSource.byIds(batch)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Exception) {
+                emptyList()
+            }
+            if (fresh.isEmpty()) return
+            gameDao.upsertAll(fresh.map { it.toEntity() })
+        }
+    }
+
+    /** [hydrate] on the process scope, for callers that are about to disappear (the import sheet). */
+    fun hydrateInBackground(ids: List<Long>) {
+        if (ids.isEmpty()) return
+        backgroundScope.launch { hydrate(ids) }
     }
 
     /**
@@ -185,5 +246,14 @@ class GameCacheRepository @Inject constructor(
 
         /** One Worker request's worth. Matches `MAX_BATCH_IDS` in `worker/src/security.ts`. */
         const val BATCH_LIMIT = 50
+
+        /** Enough for the biggest pile a link can carry (400 games + 50 ranked = 9 batches). */
+        const val MAX_HYDRATE_BATCHES = 10
+
+        /** Each batch is two IGDB requests on the Worker; this keeps one import well under 4/sec. */
+        const val HYDRATE_SPACING_MS = 750L
+
+        /** How long an id that didn't come back waits before it's asked for again. */
+        const val RETRY_AFTER_MS = 10 * 60 * 1000L
     }
 }

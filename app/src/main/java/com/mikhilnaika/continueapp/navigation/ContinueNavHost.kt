@@ -1,11 +1,13 @@
 package com.mikhilnaika.continueapp.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -22,6 +24,8 @@ import com.mikhilnaika.continueapp.feature.clipboard.ClipboardNudge
 import com.mikhilnaika.continueapp.feature.completion.CreditsRollScreen
 import com.mikhilnaika.continueapp.feature.discover.DiscoverScreen
 import com.mikhilnaika.continueapp.feature.draw.DrawScreen
+import com.mikhilnaika.continueapp.feature.friends.FriendPileScreen
+import com.mikhilnaika.continueapp.feature.friends.FriendsScreen
 import com.mikhilnaika.continueapp.feature.onboarding.OnboardingScreen
 import com.mikhilnaika.continueapp.feature.paywall.PaywallScreen
 import com.mikhilnaika.continueapp.feature.pile.PileScreen
@@ -40,6 +44,9 @@ import com.mikhilnaika.continueapp.feature.stats.StatsScreen
 @Composable
 fun ContinueNavHost(
     onboardingComplete: Boolean,
+    /** A friend to open straight away — set when the app was launched from the import sheet. */
+    openFriendId: Long? = null,
+    onOpenFriendHandled: () -> Unit = {},
     navController: NavHostController = rememberNavController(),
     chromeViewModel: AppChromeViewModel = hiltViewModel(),
 ) {
@@ -70,6 +77,7 @@ fun ContinueNavHost(
             ArcadeNavItem("DISCOVER", Icons.Filled.Search, NavDestinations.DISCOVER),
         ),
         navItemsRight = listOf(
+            ArcadeNavItem("FRIENDS", Icons.Filled.Groups, NavDestinations.FRIENDS),
             ArcadeNavItem("YOU", Icons.Filled.Person, NavDestinations.PROFILE),
         ),
         currentRoute = currentRoute,
@@ -107,6 +115,18 @@ fun ContinueNavHost(
             composable(NavDestinations.STATS) { StatsScreen(onBack = { navController.popBackStack() }) }
             composable(NavDestinations.SHARE_PILE) { PileShareScreen(onDismiss = { navController.popBackStack() }) }
             composable(NavDestinations.DISCOVER) { DiscoverScreen() }
+            composable(NavDestinations.FRIENDS) {
+                FriendsScreen(
+                    onOpenFriend = { navController.navigate(NavDestinations.friendPile(it)) },
+                    onSharePile = { navController.navigate(NavDestinations.SHARE_PILE) },
+                )
+            }
+            composable(
+                NavDestinations.FRIEND_PILE,
+                arguments = listOf(navArgument("friendId") { type = NavType.LongType }),
+            ) {
+                FriendPileScreen(onBack = { navController.popBackStack() })
+            }
             composable(NavDestinations.DRAW) {
                 DrawScreen(
                     onNavigateToDiscover = {
@@ -147,6 +167,17 @@ fun ContinueNavHost(
                     navController.navigate(NavDestinations.PILE) { popUpTo(NavDestinations.PILE) { inclusive = true } }
                 })
             }
+        }
+
+        // Arriving from a friend's link: land on FRIENDS with their pile on top, so Back goes to
+        // the list rather than out of the app. Waits for onboarding like everything else.
+        LaunchedEffect(openFriendId, onboardingComplete) {
+            if (openFriendId == null) return@LaunchedEffect
+            if (onboardingComplete) {
+                navController.navigate(NavDestinations.FRIENDS) { launchSingleTop = true }
+                if (openFriendId > 0) navController.navigate(NavDestinations.friendPile(openFriendId))
+            }
+            onOpenFriendHandled()
         }
 
         // Sits above the whole graph rather than on one screen: the clipboard is checked on

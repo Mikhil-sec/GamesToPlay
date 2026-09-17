@@ -62,8 +62,15 @@ data class DrawCandidateRow(
     val platformsJson: String,
 )
 
+/** The two facts a shared pile carries per game. */
+data class SnapshotEntryRow(val gameId: Long, val state: PileState)
+
 @Dao
 interface PileDao {
+    /** Every entry, newest first — the order that decides what survives if a shared pile is truncated. */
+    @Query("SELECT gameId, state FROM pile_entries ORDER BY addedAt DESC")
+    suspend fun getAllForSnapshot(): List<SnapshotEntryRow>
+
     @Query(
         """
         SELECT e.entryId, e.gameId, e.state, e.addedAt, e.startedAt, e.finishedAt,

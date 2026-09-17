@@ -7,6 +7,7 @@ import { resolveGame } from "./resolve/resolveGame.ts";
 import { getSteamOwnedGames } from "./routes/steamOwned.ts";
 import { spendCoins } from "./routes/coinsSpend.ts";
 import { assetLinksBody, gameLinkResponse, sanitizeCampaign } from "./routes/gameLink.ts";
+import { isPileLandingRequest, pileLinkResponse } from "./routes/pileLink.ts";
 import {
   checkRateLimits,
   MAX_BATCH_IDS,
@@ -76,6 +77,17 @@ export default {
             "Cache-Control": "no-store",
           },
         });
+      }
+
+      /**
+       * The pile landing page — `/p#<payload>`. Static, and exempt from rate limiting for the
+       * same reason as asset links: it makes no IGDB call and no KV read or write, so a limit
+       * protects nothing, while a 429 would blank the link preview for a group chat whose
+       * unfurl bot happened to share an IP with a busy one. The pile itself is in the fragment
+       * and never reaches this Worker. See routes/pileLink.ts.
+       */
+      if (isPileLandingRequest(url.pathname, request.method)) {
+        return await pileLinkResponse();
       }
 
       // Rate limiting runs before routing, so an unknown path costs an attacker the same

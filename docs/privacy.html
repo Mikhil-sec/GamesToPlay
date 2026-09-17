@@ -67,7 +67,7 @@
 <header>
   <p class="kicker">Privacy Policy</p>
   <h1>CONTINUE<span class="q">?</span></h1>
-  <p class="meta">Effective 15 August 2026 · Last updated 12 September 2026 · Applies to the Android
+  <p class="meta">Effective 15 August 2026 · Last updated 17 September 2026 · Applies to the Android
   app <code>com.mikhilnaika.continueapp</code></p>
 </header>
 
@@ -99,6 +99,10 @@ visible to us in any form:</p>
   <li>Your pile — the games you add, their status (Now Playing, Cleared, The Pile, Wanted,
       Retired), your stacks, notes and verdicts.</li>
   <li>Your rankings, trophies, statistics and draw history.</li>
+  <li>Friends' piles you chose to follow, and the names you gave those friends (see section 3b).</li>
+  <li>Your pile-sharing key — a random key created on your phone that signs the pile links you
+      share. Only its public half ever leaves the phone, and only inside links you choose to send
+      (see section 3b). It is excluded from device backups.</li>
   <li>Your coin balance and Free/Pro state cached on device.</li>
   <li>Your settings, including the haptics and clipboard toggles.</li>
   <li>Cover art and game images cached for offline use.</li>
@@ -108,7 +112,9 @@ visible to us in any form:</p>
 you share a screenshot to CONTINUE?, the text in it is read by Google ML Kit's on-device text
 recognizer. The image is never uploaded to us or to anyone else, and the app never requests
 access to your photo library.</p>
-<p>Uninstalling the app deletes all of this.</p>
+<p>Uninstalling the app deletes all of this. Your pile, rankings and the friends' piles you follow
+are included in your own Android device backup (which Google stores for you, not us), so they
+can be restored to a new phone.</p>
 
 <h2>3. What the app sends to our own server</h2>
 <p>CONTINUE? talks to a small backend of ours at
@@ -156,13 +162,41 @@ pile card shows your total hours and game count; a cleared card shows a game, it
 its position in your ranking; a high-scores card shows your top ten. Once you send it, it is in
 the hands of the app and the people you sent it to, exactly like any other photo or message.
 Nothing is posted anywhere on your behalf and nothing is shared automatically.</p>
-<p><strong>Links you send are public.</strong> A shared game link looks like
+<p><strong>Game links you send are public.</strong> A shared game link looks like
 <code>continue-worker.gamestoplay.workers.dev/g/1942</code> — a game's numeric ID and nothing
 else. It contains no identifier for you, so it cannot be traced back to you or to your pile,
 and anyone holding the link sees the same page as anyone else. When someone opens it, their
 device (or their messaging app, generating a preview) requests that page from our server and
 loads the game's artwork from IGDB, as described in section 6. That request comes from
 <em>their</em> device, not yours.</p>
+
+<h2 id="friends">3b. Following a friend's pile (FRIENDS)</h2>
+<p>You can share your whole pile with a friend who also uses CONTINUE?, and follow theirs. This
+works <strong>without accounts and without our server storing anything</strong>.</p>
+<p><strong>What a pile link contains.</strong> When you tap SHARE on the "Share your pile"
+screen, the link in the message lists every game in your pile (as numeric game IDs), which
+state each one is in, your ranked top games, the time you shared, a sequence number, and a
+public key. It does <em>not</em> contain your name, an account, a device ID or an advertising
+ID. The app says this on the share screen before you send it. Anyone you send the link to — and
+anyone they forward it to — can see that list.</p>
+<p><strong>The link never reaches our server with your pile in it.</strong> The pile is placed
+in the part of the link after the <code>#</code> (the "fragment"), which web browsers do not send
+to servers. If someone without the app opens the link, their browser requests a static page from
+our server that is identical for everyone; the game list stays in their browser. When someone
+with the app opens it, the app reads the list on their phone.</p>
+<p><strong>The public key.</strong> Your phone creates a random key pair the first time you share
+your pile. The public half is included in your links so your friends' phones can tell that a
+newer link really came from the same person, and so nobody else can overwrite your pile on their
+phone. It is not derived from anything about you or your device, it is never sent to us, and it
+is excluded from device backups. You can replace it at any time with <em>FRIENDS → Start a fresh
+share link</em>; friends who followed the old key keep the last copy you sent and cannot connect
+it to the new one.</p>
+<p><strong>When you follow a friend.</strong> Nothing is saved until you choose a name for them.
+That name is stored only on your phone. Their pile is stored on your phone and is updated only
+when you open a newer link from them — it is not live. To show their games, your phone asks our
+server for game details by numeric game ID, exactly as described in section 3; no identifier for
+you or your friend is attached. You can rename or remove a friend at any time, and removing them
+deletes their pile from your phone.</p>
 
 <h2>4. Purchases and subscriptions</h2>
 <p>Purchases are handled by <strong>Google Play Billing</strong>. We never see or receive your

@@ -1,6 +1,7 @@
 package com.mikhilnaika.continueapp.core.data
 
 import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
  * The database's version number, and the upgrade path between versions.
@@ -16,10 +17,8 @@ import androidx.room.migration.Migration
  * what every existing tester gets from Play — hits the missing migration. So the app can pass
  * every check on the bench and crash on 100% of real devices the moment it reaches the store.
  *
- * The app is one entity change away from that today: `AppDatabase` was built with no migrations
- * and no fallback. This release deliberately routed around it — every change went into DAO
- * projections and queries, which don't touch the schema — but the next column added to
- * `pile_entries` or `games` would have done it.
+ * The app shipped version 1 with no migrations and no fallback; version 2 (FRIENDS) is the first
+ * real schema change and the first time this lane has carried traffic.
  *
  * ### What to do when you *do* need to change the schema
  *
@@ -48,29 +47,48 @@ object DatabaseSchema {
      * `const val` so it can be used as an annotation argument, which is what keeps the declared
      * version and the migration list in one file and unable to drift apart.
      */
-    const val VERSION = 1
+    const val VERSION = 2
 }
 
 object AppMigrations {
 
     /**
-     * Every migration, oldest first. Empty is correct at version 1: there is no earlier shape to
-     * come from.
+     * 1 -> 2 (versionCode 11): FRIENDS — the three tables behind following a friend's pile.
      *
-     * The shape the first real one will take, for whoever gets there:
-     *
-     * ```kotlin
-     * private val MIGRATION_1_2 = object : Migration(1, 2) {
-     *     override fun migrate(db: SupportSQLiteDatabase) {
-     *         db.execSQL("ALTER TABLE pile_entries ADD COLUMN ratingNote TEXT")
-     *     }
-     * }
-     * ```
+     * Purely additive: no existing table is touched, so there is nothing of the user's to lose.
+     * The statements are copied from what Room itself generates (`schemas/…/2.json`), and
+     * `AppMigrationsTest` compares them against that file, so a later edit to one of the
+     * entities can't quietly leave this migration building a different table than a fresh
+     * install gets — which Room would reject on open, for upgraders only.
+     */
+    internal val MIGRATION_1_2_SQL: List<String> = listOf(
+        "CREATE TABLE IF NOT EXISTS `friends` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+            "`name` TEXT NOT NULL, `publicKey` TEXT NOT NULL, `sequence` INTEGER NOT NULL, " +
+            "`sharedAt` INTEGER NOT NULL, `receivedAt` INTEGER NOT NULL, `addedAt` INTEGER NOT NULL, " +
+            "`backlogTotal` INTEGER NOT NULL, `playingTotal` INTEGER NOT NULL, " +
+            "`clearedTotal` INTEGER NOT NULL, `retiredTotal` INTEGER NOT NULL, " +
+            "`wantedTotal` INTEGER NOT NULL)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS `index_friends_publicKey` ON `friends` (`publicKey`)",
+        "CREATE TABLE IF NOT EXISTS `friend_games` (`friendId` INTEGER NOT NULL, " +
+            "`gameId` INTEGER NOT NULL, `state` TEXT NOT NULL, PRIMARY KEY(`friendId`, `gameId`))",
+        "CREATE TABLE IF NOT EXISTS `friend_ranks` (`friendId` INTEGER NOT NULL, " +
+            "`position` INTEGER NOT NULL, `gameId` INTEGER NOT NULL, " +
+            "PRIMARY KEY(`friendId`, `position`))",
+    )
+
+    private val MIGRATION_1_2 = object : Migration(1, 2) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            MIGRATION_1_2_SQL.forEach(db::execSQL)
+        }
+    }
+
+    /**
+     * Every migration, oldest first.
      *
      * Add columns as nullable, or with a `NOT NULL DEFAULT`, so existing rows stay valid —
      * SQLite cannot add a `NOT NULL` column without one.
      */
-    val ALL: Array<Migration> = emptyArray()
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2)
 
     /**
      * True when [ALL] forms an unbroken chain from version 1 to [DatabaseSchema.VERSION].

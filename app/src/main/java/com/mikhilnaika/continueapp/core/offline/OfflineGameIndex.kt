@@ -94,6 +94,27 @@ class OfflineGameIndex @Inject constructor(
         return respellIn(index, query)
     }
 
+    /**
+     * The same records keyed by IGDB id — built on first use, since only FRIENDS needs it.
+     *
+     * A friend's pile arrives as bare ids. This turns most of them into a name and a cover with
+     * no network at all, so a pile opened from a group chat on the bus reads as games rather
+     * than as a wall of placeholders.
+     */
+    private val byIdDeferred: Deferred<Map<Long, OfflineGameRecord>> = scope.async(start = kotlinx.coroutines.CoroutineStart.LAZY) {
+        val map = HashMap<Long, OfflineGameRecord>()
+        for (records in indexDeferred.await().values) {
+            for (record in records) map.putIfAbsent(record.id, record)
+        }
+        map
+    }
+
+    /** Whatever the bundled index knows about [ids]. Missing ids are simply absent. */
+    suspend fun lookup(ids: Collection<Long>): List<OfflineGameRecord> {
+        val map = byIdDeferred.await()
+        return ids.mapNotNull { map[it] }
+    }
+
     companion object {
         private const val ASSET_NAME = "game_index.tsv.gz"
 
