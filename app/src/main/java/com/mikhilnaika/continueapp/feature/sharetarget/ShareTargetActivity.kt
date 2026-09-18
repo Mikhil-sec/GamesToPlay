@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -47,6 +48,7 @@ import com.mikhilnaika.continueapp.core.design.ContinueColors
 import com.mikhilnaika.continueapp.core.design.ContinueShapes
 import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
 import com.mikhilnaika.continueapp.core.design.ContinueTheme
+import com.mikhilnaika.continueapp.core.design.enableArcadeEdgeToEdge
 import com.mikhilnaika.continueapp.core.network.dto.ResolveCandidateDto
 import com.mikhilnaika.continueapp.core.share.ShareLinks
 import dagger.hilt.android.AndroidEntryPoint
@@ -62,6 +64,8 @@ class ShareTargetActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // The scrim runs behind the system bars; the sheet itself pads for them below.
+        enableArcadeEdgeToEdge()
         handleIntent(intent)
 
         setContent {
@@ -134,7 +138,10 @@ private fun ShareSheet(viewModel: ShareTargetViewModel, onDismiss: () -> Unit) {
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
                 onClick = onDismiss,
-            ),
+            )
+            // A tall sheet (a long candidate list, or the keyboard pushing it up) must stop at
+            // the status bar rather than slide under the clock.
+            .windowInsetsPadding(WindowInsets.statusBars),
         contentAlignment = Alignment.BottomCenter,
     ) {
         Column(

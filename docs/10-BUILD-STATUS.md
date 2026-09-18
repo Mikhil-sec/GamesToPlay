@@ -5,12 +5,20 @@
 > what's next. Update it whenever you finish a chunk of work or discover something that
 > changes this picture — don't let it go stale like a comment nobody re-reads.
 >
-> Last updated: **2026-09-17** — **FRIENDS ships in `versionCode 11` / `0.11.0`**, the intended
+> Last updated: **2026-09-18** — **Judge access is now in place store-side**: the 7-day trial
+> offer (`trial-feature-monthly`) is live in all 173 regions, and a promo code exists; both still
+> need a device check. The trial had never existed before today; the app needed no change.
+> 🔴 **New finding: bought coins never reach the in-app balance.** Coin packs can't be bought in
+> v11, nothing reads RevenueCat's COIN balance, and testers hold 600–4,250 COIN in RevenueCat that
+> the app never shows, so the paywall's **"A MONTHLY COIN DROP"** perk is false in v11. The store
+> listing line can be fixed without a build; the paywall line can't. See the 2026-09-18 entry.
+>
+> Previous entry: **2026-09-17** — **FRIENDS ships in `versionCode 11` / `0.11.0`**, the intended
 > production release: share your pile as a signed link, and follow friends' piles from a new
 > FRIENDS tab — no accounts, nothing stored server-side. Also: the **consent flow is verified on a
 > device** (after fixing why the debug build never showed it). **203 app tests + 75 Worker tests,
-> 0 failures.** 🔴 Not yet rendered on a device; Worker not yet deployed; privacy policy not yet
-> pushed — see the 2026-09-17 entry.
+> 0 failures.** Worker **deployed and verified**. 🔴 Not yet rendered on a device; privacy policy
+> not yet pushed — see the 2026-09-17 entry.
 >
 > Earlier: **2026-09-12** (third entry same day) — **the EEA/UK/CH exclusion is REVERSED**;
 > a real UMP consent flow ships instead, so the app goes to **all countries**. `versionCode 10` /
@@ -110,6 +118,113 @@
 
 ---
 
+## 2026-09-18 — the free trial was never created; judge access is unmet (no code change needed)
+
+`versionCode 11` went to production review on 2026-09-17. Every Shipaton category except Next Gen
+requires: *"the app must either offer a free trial or the Entrant must include a promo code for
+judges to unlock the in-app purchase and test all premium features."* The docs had this down as
+covered by "Pro Monthly — 7-day free trial". **It wasn't.**
+
+**What the live store says** (RevenueCat `get-product-store-state` on `continue_pro_monthly` /
+`prodb3fdae1092`, fetched 2026-09-18 05:35 UTC): base plan `monthly` is `ACTIVE`, P1M, $3.99 —
+and `offers: {}`. On Play a free trial is **not a property of the product or the base plan**; it
+is a separate *offer* attached to the base plan. The ✅ in `docs/09-PENDING-INPUTS.md`'s product
+table only ever verified that the product existed. The Play promo-code backup was also never
+generated. So as of today neither half of the rule is satisfied.
+
+**Why this needs no new build.** The app was written to read terms from the store, not to
+hardcode them:
+- `RealBillingRepository.toProTier()` reads the trial from
+  `product.defaultOption.freePhase` — RevenueCat's `defaultOption` is the eligible offer with the
+  longest free phase (offers tagged `rc-ignore-offer` excluded), falling back to the base plan.
+- `purchase()` passes the `Package`, so the purchase uses that same default option.
+- `PaywallScreen` already renders the `N-DAY FREE TRIAL` badge, the `START N FREE DAYS ▸` CTA and
+  the "Free for N days, then …" renewal terms whenever `freeTrialDays != null`.
+
+So creating the offer in Play Console lights up the whole trial path on the `versionCode 11`
+already in review. Offers are store configuration and do not touch the release under review.
+
+**What Mikhil does (Play Console, not code):**
+1. Monetize → Subscriptions → `continue_pro_monthly` → base plan `monthly` → **Add offer**:
+   eligibility *New customer acquisition*, one phase *Free trial, 7 days*, **no** `rc-ignore-offer`
+   tag → Activate.
+2. Monetize → **Promo codes** → a code for `continue_pro_lifetime`, for the Devpost submission —
+   a trial still demands a payment method, and some judges won't enter one. Redeemed in the Play
+   Store app (*Payments & subscriptions → Redeem code*); the RevenueCat SDK syncs out-of-app
+   purchases on the next foreground, v11 already listens via `updatedCustomerInfoListener`, and
+   RESTORE PURCHASE is the manual fallback. **Test one code end-to-end on a device before putting
+   it in the submission.**
+
+**How to verify, and what counts as done:** re-run `get-product-store-state` and confirm the offer
+appears under `base_plans.monthly.offers`; then open GO PRO on a device signed into an account that
+has **never** subscribed and see the 7-day badge (a fresh offer can take a while to propagate, and
+offerings are cached until app restart). Only the device check proves the path.
+
+**The lesson**, same shape as the earlier config-looked-applied-but-was-inert bugs: "product exists" was
+recorded as "trial exists". A requirement that lives in store config has to be checked against
+the store's live state, not against the doc that planned it.
+
+### Later the same day — trial verified live, promo code created
+
+Mikhil created both. Re-checked with `get-product-store-state` (fetched 2026-09-18 08:56 UTC):
+base plan `monthly` now carries offer **`trial-feature-monthly`**, state `ACTIVE`, one phase
+`duration P7D`, `recurrence_count 1`, `free: true` in **all 173 regions** the base plan is sold
+in, and no offer tags (so nothing hides it from RevenueCat's `defaultOption`). **Store side: done.**
+Still open: see the 7-day badge on GO PRO from a never-subscribed account (a tester who already
+had a monthly sub will correctly *not* be offered it).
+
+**Play Console's "make sure Play Billing Library is integrated" warning on the promo code.** It
+is: RevenueCat's SDK *is* a Play Billing Library wrapper — `purchases` 10.12.0 pulls in
+`com.android.billingclient:billing` 8.3.0 (the version in the Gradle cache for this build), and
+every purchase already goes through it. The warning is shown to everyone creating a code; it
+matters for apps that sell with no billing library at all. What does matter is **which kind of
+code** was made, because they redeem differently (RevenueCat docs, Google Play Offers → Promo
+codes):
+- **One-time codes** can be redeemed in the Play Store app (*Payments & subscriptions → Redeem
+  code*, or `https://play.google.com/redeem?code=…`). The purchase happens outside the app;
+  RevenueCat picks it up when the app next talks to Play, and RESTORE PURCHASE forces it.
+- **Custom codes** (one code, many uses — the convenient kind for a judge panel) can only be
+  redeemed **inside the purchase flow**: GO PRO → LIFETIME → PURCHASE → in Google's sheet, change
+  the payment method to *Redeem code*. That is an ordinary purchase through the SDK, so v11
+  handles it with no special code.
+Either way: **redeem one on a device and confirm the PRO badge appears before the code goes on
+Devpost**, and write the redemption steps for whichever type it is.
+
+### And a second unverified claim: bought coins never reach the balance
+
+Raised from another session: the Devpost drafts say coins are RevenueCat Virtual Currency. Checked
+against the code and against RevenueCat's live customer data:
+
+- **Coin packs cannot be bought in v11.** Nothing in the app references `coins_50/150/500` or the
+  `coins` offering; `RealBillingRepository` only ever reads `offerings.current` (Monthly +
+  Lifetime). There is no buy-coins UI.
+- **Nothing reads RevenueCat's COIN balance.** No `virtualCurrencies()` call anywhere.
+  `CoinLedger.creditPurchased()` — the documented bridge ("coins purchased are granted by
+  RevenueCat server-side and folded in via `creditPurchased`") — **has zero callers.** The
+  visible balance is purely the on-device ledger: 3 to start, +1 per rewarded ad, +1 per first
+  clear of a game.
+- **RevenueCat is granting — into a balance nobody sees.** The dashboard auto-grants
+  `continue_pro_monthly` → 50 COIN per cycle and `continue_pro_lifetime` → 600 once. Four closed
+  testers sampled via `list-virtual-currencies-balances` hold **600, 1,150, 1,450 and 4,250 COIN**
+  in RevenueCat (sandbox renewals run every few minutes, hence the big numbers). None of that has
+  ever appeared in their app.
+- **So a live claim in v11 is false:** the paywall perk **"A MONTHLY COIN DROP — Coins land in your
+  cabinet automatically"** (`PaywallScreen.kt` `PERKS`), and the store listing's "PRO adds …
+  a monthly coin drop" (`docs/13-STORE-LISTING.md`). The PaywallScreen comment says every perk "is
+  a capability that exists in the shipped build"; this one isn't.
+
+**What can be fixed without a build:** the store-listing sentence (remove "a monthly coin drop").
+**What can't:** the paywall perk and the missing bridge. The fix, if a v12 happens: on each
+`CustomerInfo` update / app foreground, read `Purchases.sharedInstance.virtualCurrencies()["COIN"]`,
+credit the increase over a persisted last-seen value via `creditPurchased`, then store the new
+value — offline-first stays intact, the ledger stays the source of truth for spending. (Or, the
+smaller change: drop the perk line.) If no v12 happens, **don't claim RevenueCat Virtual Currency
+as a working feature on Devpost**; the honest framing is "COIN is configured in RevenueCat with
+purchase auto-grants; the in-app balance is an offline ledger, and bridging the two is the next
+step".
+
+---
+
 ## 2026-09-17 — FRIENDS: follow a friend's pile, with no accounts
 
 **`versionCode 11` / `0.11.0`, signed** (`jarsigner` clean; `versionCode 11`, `FriendImportActivity`
@@ -185,9 +300,29 @@ FRIENDS too).
   page's script against hostile fragments and checking the CSP hash matches the embedded script.
 - ⚠️ **Nothing new has been rendered.** `adb devices` was empty all session.
 
+### Play Console's two edge-to-edge recommendations (flagged on `versionCode 8`)
+
+1. *"Edge-to-edge may not display for all users"*: only `MainActivity` opted in. The two
+   transparent sheet activities (share target, friend import) now call it too, and pad for the
+   status bar so a tall sheet stops below the clock.
+2. *"Deprecated APIs or parameters for edge-to-edge"*: `themes.xml` set
+   `android:statusBarColor` / `android:navigationBarColor`, both deprecated (and ignored) on
+   Android 15. Removed. Bars are now styled only by `core/design/EdgeToEdge.kt`.
+
+**Real bug found along the way:** the no-argument `enableEdgeToEdge()` chooses icon colour from
+the *system* theme, so on a phone in light mode the status-bar icons were dark on this dark-only
+app's dark chrome, i.e. invisible. `enableArcadeEdgeToEdge()` forces the dark style everywhere.
+
+⚠️ **Warning 2 may not fully clear.** `androidx.activity`'s own `enableEdgeToEdge()` still calls
+`Window.setStatusBarColor` for backward compatibility on older APIs, and the ads/billing SDKs
+may call deprecated window APIs too. Play attributes those calls to the app. They're
+recommendations, not release blockers. Upgrading `activity` (1.9.3 → 1.13) would need a newer
+compileSdk/AGP, which isn't worth the risk two weeks before the deadline.
+
 ### 🔴 Before this goes to production
 
-1. `npx wrangler deploy` from `worker/` (the `/p` page). App Links need nothing new.
+1. ✅ **Worker deployed 2026-09-17** (version `7e2fc6f0`) and verified against production — `/p`
+   serves the page with a CSP hash matching the served script; existing routes unchanged.
 2. Push `docs/privacy.html` (new §3b).
 3. Tap-through on a phone — list in `docs/09-PENDING-INPUTS.md`. `python tools/make_pile_link.py`
    then `adb shell am start -a android.intent.action.VIEW -d "<link>"` exercises the import sheet

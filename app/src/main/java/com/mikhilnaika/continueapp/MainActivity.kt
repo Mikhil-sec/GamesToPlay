@@ -3,7 +3,6 @@ package com.mikhilnaika.continueapp
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -13,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import com.mikhilnaika.continueapp.core.ads.ConsentManager
 import com.mikhilnaika.continueapp.core.data.UserPreferencesRepository
 import com.mikhilnaika.continueapp.core.design.ContinueTheme
+import com.mikhilnaika.continueapp.core.design.enableArcadeEdgeToEdge
 import com.mikhilnaika.continueapp.core.ui.LocalHaptics
 import com.mikhilnaika.continueapp.core.util.Haptics
 import com.mikhilnaika.continueapp.navigation.ContinueNavHost
@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableArcadeEdgeToEdge()
 
         // Fired before setContent and deliberately not awaited. Outside the EEA/UK/CH this
         // shows nothing at all; inside it, Google's form appears over the app once. Either

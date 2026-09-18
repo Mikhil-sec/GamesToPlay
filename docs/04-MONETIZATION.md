@@ -66,6 +66,14 @@ The 7-day free trial satisfies the Shipaton requirement that judges can test pre
 features without a promo code. **Also generate a Play promo code as a backup** and include
 it in the Devpost submission — belt and braces.
 
+> ⚠️ **2026-09-18: the trial did not exist.** On Play a free trial is a separate **offer** on the
+> `monthly` base plan, not a setting of the product or base plan — creating the product created
+> no trial. The live store state showed `offers: {}`. The app needs no change (it reads the trial
+> from `defaultOption.freePhase` at runtime); the offer is created in Play Console. Status and
+> steps: `docs/09-PENDING-INPUTS.md` 🔴 table, `docs/10-BUILD-STATUS.md` 2026-09-18.
+> **Later 2026-09-18: created and verified in the live store state** — offer
+> `trial-feature-monthly`, ACTIVE, one free P7D phase in all 173 regions. Promo code also created.
+
 ### What Pro unlocks
 Unlimited draws · unlimited stacks · full Steam import · all share-card themes · all app
 skins · Year in Games · cloud backup & restore · **no ads** · 50 coins/month.
@@ -176,6 +184,18 @@ be associated with a virtual currency so the balance credits without app-side lo
   verification is possible, which needs real ad units, which needs a production Play listing.
   Every feature talks only to `BillingRepository`, so that swap changes the source, not any
   call site.
+- 🔴 **Checked 2026-09-18: the "folded in via `creditPurchased`" half was never built.**
+  `CoinLedger.creditPurchased` has **no callers**; nothing in the app references `coins_50/150/500`
+  or the `coins` offering (the app only reads `offerings.current`), and nothing reads RevenueCat's
+  virtual-currency balance. So in `versionCode 11`: **coin packs cannot be bought at all**, and the
+  **Pro coin grant never reaches the balance**. RevenueCat *is* granting server-side: testers who
+  bought Pro in sandbox hold **600–4,250 COIN** in RevenueCat (sandbox monthly renewals are
+  accelerated, so 50/cycle piles up) while their in-app balance is the local ledger only. The
+  "Pro monthly stipend +50" row above and the paywall perk **A MONTHLY COIN DROP** are therefore
+  not true in v11. Fix (needs a build): on each `CustomerInfo`/foreground, read
+  `Purchases.sharedInstance.virtualCurrencies()`, credit the delta over the last-seen RevenueCat
+  balance via `creditPurchased`, persist the last-seen value. Full write-up:
+  `docs/10-BUILD-STATUS.md` 2026-09-18.
 - ~~Treat the server as the source of truth for balance. Show an optimistic local decrement
   for responsiveness, then reconcile; if the server rejects, roll back with a shake
   animation and a clear message.~~

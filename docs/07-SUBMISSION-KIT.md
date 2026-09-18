@@ -4,6 +4,65 @@ Draft copy and asset checklists. Finalize in week 7; draft now so nothing is wri
 
 ---
 
+## ⚠️ READ FIRST — fact-check before writing any Devpost copy (added 2026-09-18)
+
+**The write-ups below were drafted on 2026-08-12, before most of the app existed, and they
+describe the *plan*.** Several features they sell were never built. Judges can install the app
+and read the public repo, so a claim that's false is worse than one left out. Checked against the
+code on 2026-09-18:
+
+| Claimed in the drafts below | Reality in `versionCode 11` | Where |
+|---|---|---|
+| **FREE PLAY MODE** — ad grants 60 min of real `pro` | ❌ **Not built.** Only an ad-unit loader (`loadFreePlayAd`) exists; no UI, no temporary entitlement | Catvertising write-up |
+| Share-card **themes** (HOLOGRAPHIC FOIL etc.) as a coin/ad sink | ❌ **Not built.** Three cards exist (CLEARED, THE PILE, HIGH SCORES), one design each | Catvertising, Design |
+| **Steam import** + "one ad unlocks the rest" | ❌ **Not built** (onboarding code marks it roadmap) | Catvertising |
+| Rewards granted "only on AdMob's **server-side verification**" | ❌ **False.** Coins are granted client-side in `CoinLedger`; SSV needs real ad units on a live listing and was never wired. Say so honestly or leave it out | Catvertising |
+| **Customer Center**, **remote paywalls** | ❌ **Not built.** The GO PRO paywall is hand-built Compose on RevenueCat offerings/entitlements (`docs/04-MONETIZATION.md` §Paywall explains why) | Next Gen, Design |
+| Coins as **RevenueCat Virtual Currency** in the app | ❌ **Checked 2026-09-18: false as a working feature.** Coin packs can't be bought in v11 (no UI, `coins` offering never read); nothing reads RevenueCat's COIN balance; `CoinLedger.creditPurchased` has zero callers. RevenueCat *does* auto-grant COIN on Pro purchases (testers hold 600–4,250 there), but it never reaches the app. Honest framing: "COIN is configured in RevenueCat with purchase auto-grants; the in-app balance is an offline ledger; bridging them is next". **The same applies to "Pro includes a monthly coin drop."** Details: `docs/10` 2026-09-18 | Catvertising, Next Gen, Design |
+| THE STACK / YEAR IN GAMES cards | ❌ Not built | Design |
+| "Published on Google Play" | ⏳ `versionCode 11` in production review as of 2026-09-18. Check the listing is live before claiming it | Everywhere |
+| Pro-trial for judges | 🟠 2026-09-18: 7-day trial **live in the store**; **200 one-time promo codes** created (spreadsheet held privately, never in the repo). Both need a device check. Judge steps: Play Store → Payments & subscriptions → **Redeem code** → open CONTINUE? → YOU tab shows PRO (else GO PRO → RESTORE PURCHASE). Only put codes in a judges-only field (`docs/09`) | Deliverables |
+
+**What IS true and worth selling:** everything in the next section. For each feature,
+`docs/10-BUILD-STATUS.md` (dated entries, newest first) has the why, the bugs found and the
+verification, and `docs/02-PRODUCT-SPEC.md` has the design.
+
+### Shipped since the drafts were written — fold these in
+
+- **FRIENDS (versionCode 11, 2026-09-17), the strongest new story for Design and Gaming.**
+  Share your whole pile as a link; a friend with CONTINUE? taps it and follows your pile from a
+  FRIENDS tab, with games in common marked and one-tap add-to-my-pile. **No accounts and no
+  server storage**: the pile rides in the URL *fragment* (browsers never send it to a server), and
+  each phone signs its links with its own random key so nobody else can overwrite "your" pile on
+  a friend's phone. It updates when you share again, not live. Spec §6, security §6b, privacy §3b.
+- **The friend loop for single games (2026-09-12).** RECOMMEND IT / DARE THEM TO FINISH IT links
+  unfold in WhatsApp/Discord with real key art (an Open Graph landing page on the Worker) and open
+  straight into the app via verified Android App Links. The Credits Roll got a SHARE THIS CLEAR
+  button. Cards are now properly designed (Chakra Petch, key art, CRT scanlines), 1080×1350.
+- **Consent done properly (versionCode 10, 2026-09-12).** A real UMP consent flow instead of
+  excluding 32 EEA/UK/CH countries, so the app ships everywhere. **This is a Catvertising
+  argument:** "we built the dialog rather than delete a third of the developed world."
+  Verified on a device 2026-09-17.
+- **Share target that works offline.** A 17k-game index built from IGDB data dumps ships inside
+  the app; screenshots are OCR'd on-device (ML Kit), with no photo permission.
+- From the four closed-test feedback rounds (~21 tester reports, four builds shipped to testers
+  *during* the test — see `docs/14-PRODUCTION-ACCESS.md` §3): STATS screen, backdating cleared
+  games, one filter vocabulary across PILE/DRAW/STATS, search respelling ("spiderman" → "spider
+  man"), DISCOVER covers + SHOW MORE, RANK manual reorder, 3D STACK view, clipboard nudge,
+  REMOVE FROM PILE, a Room migration lane with a test that fails the build if a migration is
+  missing.
+- **Real usage evidence** (for the Gaming write-up): testers completed real sandbox purchases
+  of both lifetime and monthly Pro. ⚠️ Never quote RevenueCat customer counts or sandbox dollar
+  amounts — they include Google's pre-launch device farm (see memory / `docs/10` 2026-09-07).
+- **Engineering depth for Next Gen:** ~200 app unit tests + 75 Worker tests; a public-repo threat
+  model (`docs/12-SECURITY.md`) including an SSRF fix, rate limiting that protects KV quota, and
+  the signed pile-link format with a cross-language (Python) fixture test.
+
+**The demo video script below predates FRIENDS.** Consider giving it a beat: share your pile,
+then show a friend's pile opening from the chat.
+
+---
+
 ## Deliverables checklist
 
 | Item | Required by | Status |
@@ -14,7 +73,7 @@ Draft copy and asset checklists. Finalize in week 7; draft now so nothing is wri
 | Text description | All | ☐ |
 | 1024×1024 app icon | All | ☐ |
 | Screenshot 1179×2556, **no device frame** | All | ☐ |
-| Free trial **or** promo code | All except Next Gen | ☐ (7-day trial + backup code) |
+| Free trial **or** promo code | All except Next Gen | ☐ (7-day trial + backup code) — 🟠 2026-09-18: both created, trial verified in the store; device check pending, see `docs/09-PENDING-INPUTS.md` |
 | Design write-up | Design Award | ☐ |
 | Ads write-up | Catvertising | ☐ |
 | Influencer category write-up | Gaming | ☐ |

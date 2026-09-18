@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -59,6 +60,7 @@ import com.mikhilnaika.continueapp.core.design.ContinueShapes
 import com.mikhilnaika.continueapp.core.design.ContinueSpacing
 import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
 import com.mikhilnaika.continueapp.core.design.ContinueTheme
+import com.mikhilnaika.continueapp.core.design.enableArcadeEdgeToEdge
 import com.mikhilnaika.continueapp.core.friends.FriendRepository
 import com.mikhilnaika.continueapp.core.friends.PileDiff
 import com.mikhilnaika.continueapp.core.share.ShareLinks
@@ -81,6 +83,8 @@ class FriendImportActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // The scrim runs behind the system bars; the sheet itself pads for them below.
+        enableArcadeEdgeToEdge()
         // Only VIEW intents carry a pile; anything else reads as an empty (invalid) link.
         val payload = if (intent.action == Intent.ACTION_VIEW) ShareLinks.parsePilePayload(intent.data) else null
         viewModel.open(payload)
@@ -127,7 +131,10 @@ private fun ImportSheet(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
                 onClick = onDismiss,
-            ),
+            )
+            // A tall sheet (a long candidate list, or the keyboard pushing it up) must stop at
+            // the status bar rather than slide under the clock.
+            .windowInsetsPadding(WindowInsets.statusBars),
         contentAlignment = Alignment.BottomCenter,
     ) {
         Column(

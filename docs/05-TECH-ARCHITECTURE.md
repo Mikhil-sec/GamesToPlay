@@ -147,6 +147,16 @@ data class DrawEntity(
 
 ---
 
+### FRIENDS tables (schema v2, versionCode 11, 2026-09-17)
+
+`friends` (name typed on this device, the friend's public key, the last applied `sequence`,
+per-state totals), `friend_games` (friendId, gameId, state) and `friend_ranks` (friendId,
+position, gameId). The migration from 1 to 2 is purely additive, and `AppMigrationsTest` checks its SQL
+against Room's exported `2.json`. The data arrives only through signed pile links. Format:
+`core/friends/PileSnapshotCodec.kt`. Design: `02-PRODUCT-SPEC.md` §6. Threats: `12-SECURITY.md` §6b.
+The Worker gained `GET /p`, a static landing page. The pile itself is in the URL fragment and
+never reaches the Worker.
+
 ## The Cloudflare Worker (required, not optional)
 
 Three things force a backend:

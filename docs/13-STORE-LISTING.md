@@ -87,6 +87,11 @@ you'd rather use a dedicated address, it's one string in `docs/privacy.html`,
 
 ### Full description (paste as-is)
 
+> ⚠️ **2026-09-18: "a monthly coin drop" removed from the PRO paragraph below.** v11 never
+> credits RevenueCat's COIN grants to the in-app balance (`docs/10-BUILD-STATUS.md` 2026-09-18).
+> **The live Play listing still has the old sentence** until the description is re-pasted in Play
+> Console.
+
 ```
 Every gamer has a pile of unfinished games. Every app built to manage that pile is a spreadsheet with box art — and a spreadsheet of eighty-seven unplayed games is a guilt machine. So you stop opening it.
 
@@ -116,7 +121,8 @@ Your pile, your covers, your rankings and your draws all work with no connection
 No interstitials. No banners. No ad has ever appeared in this app on its own, and none ever will. Watch one only if you want a coin for an extra draw, and it will always tell you what you're getting first.
 
 ■ FREE, AND PRO
-Free gives you the whole pile, unlimited saves, search, ranking, credits rolls, and a draw every day. PRO adds unlimited draws, unlimited stacks, a monthly coin drop, and removes ads entirely — as a small monthly subscription or a one-time purchase, your choice.
+Free gives you the whole pile, unlimited saves, search, ranking, credits rolls, and a draw every day. PRO adds unlimited draws, unlimited stacks, and removes ads entirely — as a small monthly subscription or a one-time purchase, your choice.
+
 
 Game information: the data was freely provided by IGDB.com.
 
