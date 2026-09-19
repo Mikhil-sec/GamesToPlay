@@ -50,6 +50,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.mikhilnaika.continueapp.core.data.dao.PileEntryWithGame
+import com.mikhilnaika.continueapp.core.audio.LocalArcadeAudio
+import com.mikhilnaika.continueapp.core.audio.Sfx
 import com.mikhilnaika.continueapp.core.design.ContinueColors
 import com.mikhilnaika.continueapp.core.design.ContinueMotion
 import com.mikhilnaika.continueapp.core.design.ContinueShapes
@@ -168,11 +170,15 @@ fun PileStackView(
     // One detent tick per card passed, drag and fling alike — the decelerating burst at the end
     // of a flick is the reel-stopping feel the cabinet is going for. `drop(1)` so arriving on
     // the screen isn't itself a buzz.
+    val audio = LocalArcadeAudio.current
     LaunchedEffect(haptics) {
         snapshotFlow { position.value.roundToInt() }
             .distinctUntilChanged()
             .drop(1)
-            .collect { haptics?.light() }
+            .collect {
+                haptics?.light()
+                audio.play(Sfx.TICK)
+            }
     }
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {

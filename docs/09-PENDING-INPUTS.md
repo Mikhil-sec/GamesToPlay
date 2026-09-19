@@ -4,7 +4,33 @@
 > decision still waiting on Mikhil. Claude should read this at the start of every session,
 > update it as items resolve, and never block on an item marked "not yet needed."
 >
-> Last updated: **2026-09-19** — ✅ **v11 is live and device-tested (FRIENDS loop works)**,
+> ✅ **2026-09-19 (latest): dashboard steps 1–2 done, `versionCode 14` device-tested and working.**
+> Remaining: `git push` (privacy §5) → promote 14 to production → Devpost (`docs/07`).
+>
+> Last updated: **2026-09-19 (late)** — current build is **`versionCode 14` / `0.14.0`** (music
+> packs, lower levels). Earlier: **`versionCode 12` / `0.12.0` is built and signed**
+> (sound + music, CRT cold open, RevenueCat coin bridge, **RevenueCat-verified rewarded ads,
+> FREE PLAY**, RevenueCat ad tracking). Before it goes to production, in this order:
+> 1. **AdMob console → CONTINUE? app (`…~4180553585`, never the duplicate `…7461596117`) → each
+>    of the two rewarded units → Server-side verification → callback URL**
+>    `https://api.revenuecat.com/v1/incoming-webhooks/admob-ssv-rewarded`. Which unit is which:
+>    `ADMOB_UNIT_COIN` / `ADMOB_UNIT_FREE_PLAY` in `local.properties`.
+> ✅ 1 done (2026-09-19). AdMob is now connected in RevenueCat; **the reward rules are still to
+> create, by hand** — the RevenueCat MCP has no tools for Ads/Rewards.
+> 2. **RevenueCat dashboard → CONTINUE project → Ads**: connect AdMob if it isn't, then
+>    **Rewards → one rule per unit**: COIN unit → **1 `COIN`**; FREE PLAY unit → **`pro`
+>    entitlement for 60 minutes**. (docs/04 §Layer 1 lists "Charts v3 enabled" as a requirement.)
+>    🔴 If the Rewards page isn't available on this account, **tell Claude before uploading** —
+>    FREE PLAY must then be hidden, because without a rule it can only ever say "couldn't verify".
+> 3. **`git push`** — `docs/privacy.html` §5 now describes RevenueCat's ad verification and
+>    tracking (and drops a false "buy coins outright" line). Must be live before v12 is.
+> 4. **Device check on the Internal track** (release build, real ads): INSERT COIN → the coin
+>    arrives after "VERIFYING WITH REVENUECAT…"; FREE PLAY → top bar shows `FREE PLAY 59:xx` and
+>    DRAW deals; SOUND/MUSIC toggles in YOU; the cold open. Then promote to production.
+> 5. Still open from before: trial badge + one promo-code redemption; listing description re-paste
+>    (the corrected copy in `docs/13` is now *more* true: the coin drop is real in v12).
+>
+> Previous: **2026-09-19** — ✅ **v11 is live and device-tested (FRIENDS loop works)**,
 > ✅ **AdMob verified and linked to the right app**, ✅ privacy §3b live. Open items, all Mikhil's:
 > **① device-check the trial badge + redeem one promo code; ② re-paste the listing description
 > without "a monthly coin drop"; ③ decide whether a v12 fixes the paywall coin-drop perk;

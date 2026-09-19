@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.app.Activity
 import com.mikhilnaika.continueapp.core.ads.ConsentManager
+import com.mikhilnaika.continueapp.core.audio.MusicPack
+import com.mikhilnaika.continueapp.core.billing.SpendResult
 import com.mikhilnaika.continueapp.core.data.PileState
 import com.mikhilnaika.continueapp.core.data.TimeBudget
 import com.mikhilnaika.continueapp.core.data.UserPreferencesRepository
@@ -53,6 +55,14 @@ data class ProfileUiState(
     val thisYear: ThisYearStats = ThisYearStats(),
     val trophies: List<Trophy> = emptyList(),
     val hapticsEnabled: Boolean = true,
+    val soundEffectsEnabled: Boolean = true,
+    val musicEnabled: Boolean = true,
+    val musicPack: MusicPack = MusicPack.DEFAULT,
+    /** Packs this phone owns: the free default plus whatever was bought with coins. */
+    val ownedMusicPacks: Set<MusicPack> = setOf(MusicPack.DEFAULT),
+    val coinBalance: Int = 0,
+    /** A one-line answer to the last pack tap that didn't work ("need 2 more coins"). */
+    val musicPackMessage: String? = null,
     val clipboardDetectionEnabled: Boolean = false,
     val isPro: Boolean = false,
     /** True while the HIGH SCORES card renders — the button says so rather than going dead. */
@@ -76,7 +86,7 @@ class ProfileViewModel @Inject constructor(
     private val userPreferencesRepository: UserPreferencesRepository,
     private val renderer: ShareCardRenderer,
     private val consentManager: ConsentManager,
-    billingRepository: com.mikhilnaika.continueapp.core.billing.BillingRepository,
+    private val billingRepository: com.mikhilnaika.continueapp.core.billing.BillingRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ProfileUiState())
@@ -111,9 +121,30 @@ class ProfileViewModel @Inject constructor(
                 _state.update { it.copy(hapticsEnabled = haptics, clipboardDetectionEnabled = clipboard) }
             }.launchIn(viewModelScope)
 
+        combine(
+            userPreferencesRepository.isSoundEffectsEnabled,
+            userPreferencesRepository.isMusicEnabled,
+        ) { sound, music -> sound to music }
+            .onEach { (sound, music) ->
+                _state.update { it.copy(soundEffectsEnabled = sound, musicEnabled = music) }
+            }.launchIn(viewModelScope)
+
         billingRepository.isPro
             .onEach { pro -> _state.update { it.copy(isPro = pro) } }
             .launchIn(viewModelScope)
+
+        billingRepository.coinBalance
+            .onEach { coins -> _state.update { it.copy(coinBalance = coins) } }
+            .launchIn(viewModelScope)
+
+        combine(
+            userPreferencesRepository.musicPackId,
+            userPreferencesRepository.unlockedMusicPackIds,
+        ) { id, unlocked ->
+            MusicPack.fromId(id) to (MusicPack.entries.filter { it.price == 0 || it.id in unlocked }.toSet())
+        }.onEach { (pack, owned) ->
+            _state.update { it.copy(musicPack = pack, ownedMusicPacks = owned) }
+        }.launchIn(viewModelScope)
 
         consentManager.privacyOptionsRequired
             .onEach { required -> _state.update { it.copy(privacyOptionsRequired = required) } }
@@ -259,7 +290,41 @@ class ProfileViewModel @Inject constructor(
      */
     fun showPrivacyOptions(activity: Activity) = consentManager.showPrivacyOptionsForm(activity)
 
+    /** Switches to a pack this phone already owns. */
+    fun selectMusicPack(pack: MusicPack) = viewModelScope.launch {
+        if (pack !in _state.value.ownedMusicPacks) return@launch
+        _state.update { it.copy(musicPackMessage = null) }
+        userPreferencesRepository.setMusicPackId(pack.id)
+    }
+
+    /**
+     * Buys [pack] with coins and switches to it. The spend and the unlock aren't one
+     * transaction, so the order matters: coins are taken first and the unlock written only on
+     * success, which means a crash in between can cost coins but can never hand out a free pack.
+     */
+    fun unlockMusicPack(pack: MusicPack) = viewModelScope.launch {
+        if (pack in _state.value.ownedMusicPacks) {
+            userPreferencesRepository.setMusicPackId(pack.id)
+            return@launch
+        }
+        when (billingRepository.spendCoins(pack.price, "music_pack_${pack.id}")) {
+            is SpendResult.Success -> {
+                userPreferencesRepository.addUnlockedMusicPack(pack.id)
+                userPreferencesRepository.setMusicPackId(pack.id)
+                _state.update { it.copy(musicPackMessage = null) }
+            }
+            is SpendResult.InsufficientFunds -> _state.update {
+                val short = pack.price - it.coinBalance
+                it.copy(musicPackMessage = "${pack.title} needs $short more coin${if (short == 1) "" else "s"}. " +
+                    "Clear a game, or INSERT COIN on the DRAW screen.")
+            }
+            is SpendResult.Error -> _state.update { it.copy(musicPackMessage = "Couldn't unlock that. Try again.") }
+        }
+    }
+
     fun setHapticsEnabled(enabled: Boolean) = viewModelScope.launch { userPreferencesRepository.setHapticsEnabled(enabled) }
+    fun setSoundEffectsEnabled(enabled: Boolean) = viewModelScope.launch { userPreferencesRepository.setSoundEffectsEnabled(enabled) }
+    fun setMusicEnabled(enabled: Boolean) = viewModelScope.launch { userPreferencesRepository.setMusicEnabled(enabled) }
     fun setClipboardDetectionEnabled(enabled: Boolean) = viewModelScope.launch { userPreferencesRepository.setClipboardDetectionEnabled(enabled) }
 
     private companion object {

@@ -11,11 +11,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.mikhilnaika.continueapp.core.audio.LocalArcadeAudio
+import com.mikhilnaika.continueapp.core.audio.MusicCue
+import com.mikhilnaika.continueapp.core.audio.MusicTrack
+import com.mikhilnaika.continueapp.core.audio.Sfx
 import com.mikhilnaika.continueapp.core.design.ContinueColors
 import com.mikhilnaika.continueapp.core.design.ContinueSpacing
 import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
@@ -30,11 +35,18 @@ import com.mikhilnaika.continueapp.core.ui.ArcadeButton
 fun DrawGateScreen(
     state: DrawUiState,
     onInsertCoin: () -> Unit,
+    onFreePlay: () -> Unit,
     onUseCoin: () -> Unit,
     onGoPro: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // The arcade continue screen always had music: the tune is what made ten seconds feel like
+    // a decision. It stops by itself while the rewarded ad covers the app (ON_STOP).
+    MusicCue(MusicTrack.CONTINUE)
+    val audio = LocalArcadeAudio.current
+    LaunchedEffect(state.gateError) { if (state.gateError != null) audio.play(Sfx.ERROR) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -67,6 +79,10 @@ fun DrawGateScreen(
 
         if (state.gateBusy) {
             CircularProgressIndicator(color = ContinueColors.AccentCoin)
+            state.gateStatus?.let { status ->
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = ContinueSpacing.MD.dp))
+                Text(text = status, style = ContinueTextStyles.label, color = ContinueColors.TextSecondary)
+            }
         } else {
             GateAction(
                 label = "▸ INSERT COIN",
@@ -79,8 +95,21 @@ fun DrawGateScreen(
                 label = "▸ USE A COIN (${state.coinBalance})",
                 sublabel = "Spend a coin to continue",
                 accent = ContinueColors.AccentCoin,
-                onClick = onUseCoin,
+                // The one moment in the app that is literally inserting a coin.
+                onClick = {
+                    audio.play(Sfx.COIN)
+                    onUseCoin()
+                },
                 enabled = state.coinBalance > 0,
+            )
+            androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = ContinueSpacing.SM.dp))
+            // The ad that hands over the most app. Priced in plain words before anything plays —
+            // every ad here is a trade the user chooses, never an interruption.
+            GateAction(
+                label = "▸ FREE PLAY — 60 MIN OF PRO",
+                sublabel = "Watch one ad. Everything unlocks for an hour.",
+                accent = ContinueColors.AccentHot,
+                onClick = onFreePlay,
             )
             androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = ContinueSpacing.SM.dp))
             GateAction(

@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import com.mikhilnaika.continueapp.core.data.RankBucket
+import com.mikhilnaika.continueapp.core.audio.LocalArcadeAudio
+import com.mikhilnaika.continueapp.core.audio.Sfx
 import com.mikhilnaika.continueapp.core.design.ContinueColors
 import com.mikhilnaika.continueapp.core.design.ContinueSpacing
 import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
@@ -41,6 +43,7 @@ fun RankScreen(
     viewModel: RankViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    val audio = LocalArcadeAudio.current
 
     Column(
         modifier = modifier
@@ -51,7 +54,10 @@ fun RankScreen(
         when (state.phase) {
             RankPhase.LOADING -> Unit
             RankPhase.BUCKET_SELECT -> BucketSelect(gameName = state.gameName, onSelect = viewModel::selectBucket)
-            RankPhase.COMPARING -> Comparing(state = state, onChoose = viewModel::chooseWinner)
+            RankPhase.COMPARING -> Comparing(state = state, onChoose = { winner ->
+                audio.play(Sfx.SELECT)
+                viewModel.chooseWinner(winner)
+            })
             RankPhase.VERDICT -> VerdictStep(
                 state = state,
                 onVerdictChanged = viewModel::setVerdictText,

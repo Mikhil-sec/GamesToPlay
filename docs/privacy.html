@@ -67,7 +67,7 @@
 <header>
   <p class="kicker">Privacy Policy</p>
   <h1>CONTINUE<span class="q">?</span></h1>
-  <p class="meta">Effective 15 August 2026 · Last updated 17 September 2026 · Applies to the Android
+  <p class="meta">Effective 15 August 2026 · Last updated 19 September 2026 · Applies to the Android
   app <code>com.mikhilnaika.continueapp</code></p>
 </header>
 
@@ -77,7 +77,8 @@
   never ask for your name, email, phone number, contacts, photos library or location.</p>
   <p>Three things do involve other companies: <strong>Google AdMob</strong> serves the optional
   rewarded ads you choose to watch, <strong>RevenueCat</strong> and <strong>Google Play</strong>
-  process purchases, and our own small server looks up game information for you. What each of
+  process purchases (and RevenueCat checks that a rewarded ad was really watched before its reward
+  is given), and our own small server looks up game information for you. What each of
   them receives is spelled out below.</p>
 </div>
 
@@ -225,8 +226,15 @@ prevention:</p>
   <li><strong>Interactions</strong> such as app launches, taps and ad views.</li>
   <li><strong>Diagnostic information</strong> about app performance.</li>
 </ul>
-<p>This data goes to Google and its advertising partners, not to us. We receive only aggregate
-earnings reports, which contain no information about individuals.</p>
+<p>This data goes to Google and its advertising partners, not to us.</p>
+<p><strong>RevenueCat verifies rewards and records ad events.</strong> When you choose to watch a
+rewarded ad, the app gives AdMob a one-time token from RevenueCat. When you finish the ad, AdMob
+tells RevenueCat, and RevenueCat grants the reward you were promised (a coin, or an hour of Pro)
+&mdash; this is what stops rewards being faked. RevenueCat also records that an ad loaded, was
+shown or was tapped, the ad network's estimate of what it earned, and which button it was offered
+from, all against the same <em>anonymous</em> app user ID described in section 4. No advertising
+ID, name, email or location is sent to RevenueCat. We use these records only to understand how
+the optional ads perform, alongside purchases.</p>
 <p><strong>If you are in the EEA, the UK or Switzerland</strong>, CONTINUE? shows you Google's
 consent form the first time you open the app, and requests no ads until you have answered it. You
 can change your answer whenever you like: open the <strong>YOU</strong> tab and tap
@@ -238,7 +246,7 @@ than from anything about you or your past activity, and your advertising ID is n
 profile you. Either way the ad is optional: nothing plays unless you tap a button that first tells
 you what you get for watching it.</p>
 <p>Declining changes nothing else in the app. Your pile, the draw, ranking, sharing and offline use
-all work identically, and you can still earn coins by clearing games or buy them outright.</p>
+all work identically, and you can still earn coins by clearing games, or receive them with Pro.</p>
 <p><strong>Your controls:</strong> on Android, open <em>Settings → Google → Ads</em> to delete
 or reset your advertising ID, or to opt out of ad personalisation entirely. The app keeps
 working if you do. See

@@ -3,7 +3,11 @@ package com.mikhilnaika.continueapp.feature.draw
 import android.app.Activity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mikhilnaika.continueapp.core.ads.AdPlacement
 import com.mikhilnaika.continueapp.core.ads.AdRepository
+import com.mikhilnaika.continueapp.core.ads.AdReward
+import com.mikhilnaika.continueapp.core.ads.FreePlay
+import com.mikhilnaika.continueapp.core.ads.FreePlayOutcome
 import com.mikhilnaika.continueapp.core.ads.AdResult
 import com.mikhilnaika.continueapp.core.billing.BillingRepository
 import com.mikhilnaika.continueapp.core.billing.PurchaseResult
@@ -32,6 +36,7 @@ import javax.inject.Inject
 /** docs/02-PRODUCT-SPEC.md §3 "The economy of DRAW" — free users get 1 draw per day. */
 private const val FREE_DRAWS_PER_DAY = 1
 private const val COIN_COST_PER_CONTINUE = 1
+private const val NO_AD = "No ad available right now — try again shortly."
 
 @HiltViewModel
 class DrawViewModel @Inject constructor(
@@ -39,6 +44,7 @@ class DrawViewModel @Inject constructor(
     private val drawDao: DrawDao,
     private val billingRepository: BillingRepository,
     private val adRepository: AdRepository,
+    private val freePlay: FreePlay,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(DrawUiState())
@@ -126,26 +132,69 @@ class DrawViewModel @Inject constructor(
         _state.update { it.copy(phase = DrawPhase.DIALS, gateError = null) }
     }
 
-    /** GATE action: watch a rewarded ad for +1 coin (does not itself continue the draw). */
+    /**
+     * GATE action: INSERT COIN — watch a rewarded ad for +1 coin (it doesn't itself continue).
+     *
+     * The coin is granted by **RevenueCat**, not by this app: the ad's reward rule adds 1 COIN
+     * server-side once AdMob's verification callback checks out, and [BillingRepository.syncStoreCoins]
+     * reads it back in. Only if verification can't complete — offline, or AdMob running late —
+     * does the app pay the coin itself. Someone who sat through an ad has earned it, and the
+     * price of that honesty is at most one coin counted twice if a late verification lands
+     * after all. A coin gates one extra draw; that's the right side to err on.
+     */
     fun insertCoin(activity: Activity) {
         viewModelScope.launch {
-            _state.update { it.copy(gateBusy = true, gateError = null) }
-            val ad = adRepository.loadCoinAd()
+            _state.update { it.copy(gateBusy = true, gateError = null, gateStatus = "LOADING AD…") }
+            val ad = adRepository.load(AdPlacement.COIN)
             if (ad == null) {
-                _state.update { it.copy(gateBusy = false, gateError = "No ad available right now — try again shortly.") }
+                _state.update { it.copy(gateBusy = false, gateStatus = null, gateError = NO_AD) }
                 return@launch
             }
-            when (val result = adRepository.show(activity, ad)) {
-                is AdResult.Granted -> {
-                    when (val earn = billingRepository.earnCoins(1, "draw_continue_ad")) {
-                        is SpendResult.Success -> _state.update { it.copy(gateBusy = false) }
-                        is SpendResult.Error -> _state.update { it.copy(gateBusy = false, gateError = earn.message) }
-                        else -> _state.update { it.copy(gateBusy = false) }
+            val result = adRepository.show(activity, ad)
+            _state.update { it.copy(gateStatus = "VERIFYING WITH REVENUECAT…") }
+            when (result) {
+                is AdResult.Verified -> {
+                    val paidCoins = result.rewards.any { it is AdReward.Currency }
+                    if (!paidCoins) {
+                        // Verified, but the unit's rule paid something other than coins —
+                        // a dashboard misconfiguration the user shouldn't pay for.
+                        billingRepository.earnCoins(1, "draw_continue_ad_unmatched")
+                    } else if (billingRepository.syncStoreCoins() == 0) {
+                        // Granted server-side but not readable yet; one short retry, and if
+                        // it's still not there the next launch's sync will bring it in.
+                        delay(1_500)
+                        billingRepository.syncStoreCoins()
                     }
+                    _state.update { it.copy(gateBusy = false, gateStatus = null) }
                 }
-                is AdResult.NoFill -> _state.update { it.copy(gateBusy = false, gateError = "No ad available right now — try again shortly.") }
-                is AdResult.UserCancelled -> _state.update { it.copy(gateBusy = false) }
-                is AdResult.Error -> _state.update { it.copy(gateBusy = false, gateError = result.message) }
+                is AdResult.Unverified -> {
+                    billingRepository.earnCoins(1, "draw_continue_ad_unverified")
+                    _state.update { it.copy(gateBusy = false, gateStatus = null) }
+                }
+                is AdResult.NoFill -> _state.update { it.copy(gateBusy = false, gateStatus = null, gateError = NO_AD) }
+                is AdResult.UserCancelled -> _state.update {
+                    it.copy(gateBusy = false, gateStatus = null, gateError = "Closed early — no coin this time.")
+                }
+                is AdResult.Error -> _state.update { it.copy(gateBusy = false, gateStatus = null, gateError = result.message) }
+            }
+        }
+    }
+
+    /**
+     * GATE action: FREE PLAY — see [FreePlay]. Nothing here deals the cards: once PRO is active,
+     * [onReturnedFromPaywall] (keyed on `isPro` in DrawScreen) sees the gate open and deals, the
+     * same path a purchase takes.
+     */
+    fun freePlay(activity: Activity) {
+        viewModelScope.launch {
+            _state.update { it.copy(gateBusy = true, gateError = null) }
+            val outcome = freePlay.start(activity) { status -> _state.update { it.copy(gateStatus = status) } }
+            _state.update {
+                it.copy(
+                    gateBusy = false,
+                    gateStatus = null,
+                    gateError = (outcome as? FreePlayOutcome.Failed)?.message,
+                )
             }
         }
     }

@@ -36,6 +36,8 @@ data class DrawUiState(
     val coinBalance: Int = 0,
     val gateCountdown: Int = 9,
     val gateBusy: Boolean = false,
+    /** What the gate is waiting on while [gateBusy] — "VERIFYING…" reads very differently from a bare spinner. */
+    val gateStatus: String? = null,
     val gateError: String? = null,
     val lastVerdictGameName: String? = null,
     val lastVerdict: SwipeVerdict? = null,

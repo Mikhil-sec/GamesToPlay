@@ -52,8 +52,8 @@ android {
         applicationId = "com.mikhilnaika.continueapp"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "0.11.0"
+        versionCode = 14
+        versionName = "0.14.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

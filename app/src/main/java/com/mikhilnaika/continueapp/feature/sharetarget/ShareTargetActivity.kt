@@ -51,7 +51,12 @@ import com.mikhilnaika.continueapp.core.design.ContinueTheme
 import com.mikhilnaika.continueapp.core.design.enableArcadeEdgeToEdge
 import com.mikhilnaika.continueapp.core.network.dto.ResolveCandidateDto
 import com.mikhilnaika.continueapp.core.share.ShareLinks
+import com.mikhilnaika.continueapp.core.audio.ArcadeAudio
+import com.mikhilnaika.continueapp.core.audio.LocalArcadeAudio
+import com.mikhilnaika.continueapp.core.audio.Sfx
+import androidx.compose.runtime.CompositionLocalProvider
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 /**
  * Transparent bottom-sheet Activity — the full app never launches for a share. Registered
@@ -59,6 +64,9 @@ import dagger.hilt.android.AndroidEntryPoint
  */
 @AndroidEntryPoint
 class ShareTargetActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var audio: ArcadeAudio
 
     private val viewModel: ShareTargetViewModel by viewModels()
 
@@ -70,10 +78,12 @@ class ShareTargetActivity : ComponentActivity() {
 
         setContent {
             ContinueTheme {
-                ShareSheet(
-                    viewModel = viewModel,
-                    onDismiss = { finish() },
-                )
+                CompositionLocalProvider(LocalArcadeAudio provides audio) {
+                    ShareSheet(
+                        viewModel = viewModel,
+                        onDismiss = { finish() },
+                    )
+                }
             }
         }
     }
@@ -307,7 +317,9 @@ private fun AlreadyInPileNotice(gameName: String, onDismiss: () -> Unit) {
 private fun AddedConfirmation(gameName: String, onDismiss: () -> Unit) {
     // Auto-dismisses in ~1.2s per docs/02-PRODUCT-SPEC.md §2a; the button below is the
     // tap-to-skip escape hatch every ritual in this app is required to have.
+    val audio = LocalArcadeAudio.current
     androidx.compose.runtime.LaunchedEffect(gameName) {
+        audio.play(Sfx.ADD)
         kotlinx.coroutines.delay(1200)
         onDismiss()
     }

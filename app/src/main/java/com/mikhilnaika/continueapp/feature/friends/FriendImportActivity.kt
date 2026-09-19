@@ -66,7 +66,12 @@ import com.mikhilnaika.continueapp.core.friends.PileDiff
 import com.mikhilnaika.continueapp.core.share.ShareLinks
 import com.mikhilnaika.continueapp.core.ui.ArcadeButton
 import com.mikhilnaika.continueapp.core.util.RelativeTime
+import com.mikhilnaika.continueapp.core.audio.ArcadeAudio
+import com.mikhilnaika.continueapp.core.audio.LocalArcadeAudio
+import com.mikhilnaika.continueapp.core.audio.Sfx
+import androidx.compose.runtime.CompositionLocalProvider
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 /**
  * Where a friend's pile link lands — a transparent sheet over whatever app it was tapped in,
@@ -78,6 +83,9 @@ import dagger.hilt.android.AndroidEntryPoint
  */
 @AndroidEntryPoint
 class FriendImportActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var audio: ArcadeAudio
 
     private val viewModel: FriendImportViewModel by viewModels()
 
@@ -91,14 +99,16 @@ class FriendImportActivity : ComponentActivity() {
 
         setContent {
             ContinueTheme {
-                val state by viewModel.state.collectAsState()
-                ImportSheet(
-                    state = state,
-                    onAdd = viewModel::addFriend,
-                    onReplace = viewModel::replaceFriend,
-                    onOpenFriend = ::openFriend,
-                    onDismiss = ::finish,
-                )
+                CompositionLocalProvider(LocalArcadeAudio provides audio) {
+                    val state by viewModel.state.collectAsState()
+                    ImportSheet(
+                        state = state,
+                        onAdd = viewModel::addFriend,
+                        onReplace = viewModel::replaceFriend,
+                        onOpenFriend = ::openFriend,
+                        onDismiss = ::finish,
+                    )
+                }
             }
         }
     }
@@ -168,6 +178,12 @@ private fun ImportSheet(
                     Icon(Icons.Filled.Close, contentDescription = "Close", tint = ContinueColors.TextSecondary)
                 }
             }
+
+            // "A NEW CHALLENGER HAS ENTERED" — only for the moment a pile actually lands, keyed
+            // on the state's type so recomposition can't replay it.
+            val audio = LocalArcadeAudio.current
+            val arrived = state is FriendImportState.Saved || state is FriendImportState.Updated
+            androidx.compose.runtime.LaunchedEffect(arrived) { if (arrived) audio.play(Sfx.FRIEND) }
 
             when (state) {
                 FriendImportState.Loading -> Box(

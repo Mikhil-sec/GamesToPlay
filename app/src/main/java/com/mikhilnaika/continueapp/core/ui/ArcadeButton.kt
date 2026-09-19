@@ -23,6 +23,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.clickable
+import com.mikhilnaika.continueapp.core.audio.LocalArcadeAudio
+import com.mikhilnaika.continueapp.core.audio.Sfx
 import com.mikhilnaika.continueapp.core.design.ContinueColors
 import com.mikhilnaika.continueapp.core.design.ContinueMotion
 import com.mikhilnaika.continueapp.core.design.ContinueShapes
@@ -42,6 +44,7 @@ fun ArcadeButton(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
+    val audio = LocalArcadeAudio.current
     val scale by animateFloatAsState(
         targetValue = if (pressed) 0.96f else 1f,
         animationSpec = ContinueMotion.snappy(),
@@ -57,7 +60,12 @@ fun ArcadeButton(
                 interactionSource = interactionSource,
                 indication = null,
                 enabled = enabled,
-                onClick = onClick,
+                // Every arcade button clicks. Payoff sounds (coin, power-up) are layered on by
+                // whatever the press *causes*, so this stays a tiny blip.
+                onClick = {
+                    audio.play(Sfx.BLIP)
+                    onClick()
+                },
             )
             .padding(PaddingValues(horizontal = 24.dp, vertical = 14.dp)),
         contentAlignment = Alignment.Center,
@@ -82,6 +90,7 @@ fun ArcadeDrawButton(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
+    val audio = LocalArcadeAudio.current
     val scale by animateFloatAsState(
         targetValue = if (pressed) 0.92f else 1f,
         animationSpec = ContinueMotion.snappy(),
@@ -102,7 +111,12 @@ fun ArcadeDrawButton(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = onClick,
+                // Every arcade button clicks. Payoff sounds (coin, power-up) are layered on by
+                // whatever the press *causes*, so this stays a tiny blip.
+                onClick = {
+                    audio.play(Sfx.BLIP)
+                    onClick()
+                },
             ),
         contentAlignment = Alignment.Center,
     ) {

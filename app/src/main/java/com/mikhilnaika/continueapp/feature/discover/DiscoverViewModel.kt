@@ -59,9 +59,10 @@ data class DiscoverUiState(
  *
  * Carries an [id] purely so that adding the same game twice in a row still re-triggers the
  * banner: without it the state would be `==` to the last one and the UI would sit silent on
- * exactly the tap the user most needs an answer to.
+ * exactly the tap the user most needs an answer to. [fresh] is true when the tap actually put a
+ * new game in the pile — that one chimes; "already in your pile" doesn't.
  */
-data class DiscoverMessage(val id: Long, val text: String)
+data class DiscoverMessage(val id: Long, val text: String, val fresh: Boolean = false)
 
 /**
  * One browsable row. [key] exists so a rail can be filled in when its request lands without the
@@ -370,6 +371,7 @@ class DiscoverViewModel @Inject constructor(
                     message = DiscoverMessage(
                         id = System.currentTimeMillis(),
                         text = messageFor(game, state, alreadyInPile, backdated = finishedAt != null),
+                        fresh = !alreadyInPile,
                     ),
                 )
             }

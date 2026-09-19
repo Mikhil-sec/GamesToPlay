@@ -2,6 +2,7 @@ package com.mikhilnaika.continueapp.core.billing
 
 import android.app.Activity
 import com.revenuecat.purchases.Package
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
@@ -17,6 +18,12 @@ class FakeBillingRepository @Inject constructor() : BillingRepository {
     override val isPro: MutableStateFlow<Boolean> = MutableStateFlow(false)
     override val proExpiresAt: MutableStateFlow<Long?> = MutableStateFlow(null)
     override val coinBalance: MutableStateFlow<Int> = MutableStateFlow(10)
+    override val coinDrops = MutableSharedFlow<Int>(extraBufferCapacity = 1)
+
+    /** Debug has no RevenueCat balance to read. */
+    override suspend fun syncStoreCoins(): Int = 0
+
+    override suspend fun refreshEntitlements() = Unit
 
     override suspend fun purchase(activity: Activity, pkg: Package): PurchaseResult {
         isPro.value = true

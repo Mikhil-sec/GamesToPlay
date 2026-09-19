@@ -11,7 +11,19 @@ describe the *plan*.** Several features they sell were never built. Judges can i
 and read the public repo, so a claim that's false is worse than one left out. Checked against the
 code on 2026-09-18:
 
-| Claimed in the drafts below | Reality in `versionCode 11` | Where |
+> **Update 2026-09-19 (v12):** three rows below changed. **FREE PLAY**, **RevenueCat-verified
+> rewarded ads** and **RevenueCat COIN reaching the app** are now *built* in `versionCode 12`
+> (`docs/10` 2026-09-19 v12). They become claimable only once (a) the AdMob SSV URL and RevenueCat
+> reward rules are configured and (b) each is seen working on a device on the live build. Until
+> then, treat them as ❌ in any copy.
+>
+> **✅ Cleared 2026-09-19 (late):** Mikhil configured the AdMob SSV URLs and both RevenueCat reward
+> rules and reported "everything done and works" on `versionCode 14` (Internal track): verified
+> INSERT COIN, FREE PLAY, the COIN bridge, and the music packs. **Claimable once 14 is live in
+> production.** Still true and worth saying precisely: INSERT COIN falls back to a local coin if
+> verification can't complete; FREE PLAY never does.
+
+| Claimed in the drafts below | Reality in `versionCode 11` (see v12 note above) | Where |
 |---|---|---|
 | **FREE PLAY MODE** — ad grants 60 min of real `pro` | ❌ **Not built.** Only an ad-unit loader (`loadFreePlayAd`) exists; no UI, no temporary entitlement | Catvertising write-up |
 | Share-card **themes** (HOLOGRAPHIC FOIL etc.) as a coin/ad sink | ❌ **Not built.** Three cards exist (CLEARED, THE PILE, HIGH SCORES), one design each | Catvertising, Design |
@@ -63,6 +75,55 @@ verification, and `docs/02-PRODUCT-SPEC.md` has the design.
 then show a friend's pile opening from the chat.
 
 ---
+
+## The bar and the field (researched 2026-09-19)
+
+**Rule for using this section:** the benchmarks set the *quality bar*; the competitor rows are a
+*feature comparison only*. No competitor's wording, structure or tone is a model for ours — several
+are thin, and writing to their level would be writing down.
+
+### The official 2026 criteria (devpost, verbatim) — every write-up answers these, in these words
+
+| Category | Criteria |
+|---|---|
+| **Gaming** | "Gaming bucket list where players easily **save, organize, complete, rate, and share** games they want to play." → structure the Gaming write-up *and the video* around those five verbs, one proof each. |
+| **Design** | "App that best represents the **craft** of app development — separate from viability as a business. Looking for innovative ideas and/or beautiful app design and animations." |
+| **Catvertising** | "Most creative and effective use of ads as a monetization method. Looking for **clever placements**, **smart integration with the rest of the revenue stack**, and **an experience users don't hate**." |
+| **Next Gen** | Judged on a video and open-source code; students only; no store release needed. |
+| All | Video ≤ 2:00 — "judges are not required to watch beyond two minutes". Icon 1024², ≥1 screenshot 1179×2556 no frame, trial or promo code. |
+
+### Benchmarks — what 2025 winners (same sponsor) actually submitted
+
+- **Dayloop** (Design Award, 1st): ~2,100 words, standard Devpost headings, 4 screenshots, first-person
+  story of *design iterations* ("it didn't have magic, so we added…"). Zero RevenueCat detail and zero
+  metrics — **the craft story carried it**.
+- **Vector Guard** (HAMM, 1st): ~1,200 words; opens on a hard number; one named, memorable
+  monetization idea ("the 1:50 model") that *is* the pitch.
+- **Crystal Abyss** (Staff & Sponsors, 1st): ~2,800 words; honest about what isn't finished yet;
+  names its influences precisely.
+- Across all 2025 winners: the winning move is **one crisp idea per category, named, with the
+  reasoning shown**, not a feature list. Metrics help where the category is about traction (ours
+  aren't). Honesty about limits read as credibility, not weakness.
+
+**What that means for us:** each category write-up leads with its one idea — Gaming: *a backlog is a
+decision problem, so it's a machine you pull*; Design: *the arcade is the interaction model, not a
+skin* (lever, dispenser, continue screen, credits roll, CRT, synthesised sound); Catvertising: *the ad
+is a coin you insert — every placement is a CONTINUE?, verified by RevenueCat, and FREE PLAY hands
+over real PRO*. Show design iterations from the four tester rounds (real, dated, in `docs/10`).
+
+### The field in the Gaming category (as of 2026-09-19; five entries public)
+
+| Entry | Platform / store | What overlaps with us | What they have that we don't | What we have that they don't |
+|---|---|---|---|---|
+| Playwall | iOS, App Store | Share-sheet capture, IGDB via a Cloudflare Worker, comparative rating, "anti-guilt" framing | iCloud sync, yearly "receipt" | Android; DRAW machine; friends following piles; ads; video (none of the five has one yet) |
+| QuestLog | iOS + Android (KMP), both stores | Mood/duration roulette, pile-of-shame counter, verdicts, share cards, IGDB | 17 languages, iOS | Physical lever/deal ritual, share-target from TikTok/YouTube incl. offline OCR, FRIENDS, Credits Roll, ads |
+| NextUp | Web only, not on a store | Mood/time "pick my next" | Movies/TV too | A published app (required for Gaming) |
+| Cibby | iOS, App Store (physical collections) | Game library | 3D boxes, soundtracks, 700k views on X, 700 TestFlight users | Backlog *completion* focus, draw, rank, friends |
+| (2 more seen off-Devpost) | ? | ? | ? | ? |
+
+**No other entry uses ads at all** as of today, so Catvertising may be close to uncontested among
+gaming apps. That raises the value of v12's verified ads + FREE PLAY — *if* they work on the live
+build. **Nobody has a video yet.** Ours is the biggest single lever left.
 
 ## Deliverables checklist
 

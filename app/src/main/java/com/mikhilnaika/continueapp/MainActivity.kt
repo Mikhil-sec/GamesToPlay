@@ -10,6 +10,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.mikhilnaika.continueapp.core.ads.ConsentManager
+import com.mikhilnaika.continueapp.core.audio.ArcadeAudio
+import com.mikhilnaika.continueapp.core.audio.LocalArcadeAudio
 import com.mikhilnaika.continueapp.core.data.UserPreferencesRepository
 import com.mikhilnaika.continueapp.core.design.ContinueTheme
 import com.mikhilnaika.continueapp.core.design.enableArcadeEdgeToEdge
@@ -51,6 +53,10 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var haptics: Haptics
 
+    /** Same arrangement as [haptics]: the SOUND and MUSIC toggles live inside it. */
+    @Inject
+    lateinit var audio: ArcadeAudio
+
     /**
      * Google requires the consent status to be refreshed on **every** launch, not once — it
      * can change server-side when a vendor list or policy changes, so a one-time check would
@@ -81,7 +87,7 @@ class MainActivity : ComponentActivity() {
             val onboardingComplete by viewModel.onboardingComplete.collectAsStateWithLifecycle()
             onboardingComplete?.let { complete ->
                 ContinueTheme {
-                    CompositionLocalProvider(LocalHaptics provides haptics) {
+                    CompositionLocalProvider(LocalHaptics provides haptics, LocalArcadeAudio provides audio) {
                         ContinueNavHost(
                             onboardingComplete = complete,
                             openFriendId = openFriendId,

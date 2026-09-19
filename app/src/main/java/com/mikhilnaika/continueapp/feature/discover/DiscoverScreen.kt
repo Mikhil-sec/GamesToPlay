@@ -54,6 +54,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import com.mikhilnaika.continueapp.core.data.PileState
+import com.mikhilnaika.continueapp.core.audio.LocalArcadeAudio
+import com.mikhilnaika.continueapp.core.audio.Sfx
 import com.mikhilnaika.continueapp.core.design.ContinueColors
 import com.mikhilnaika.continueapp.core.design.ContinueShapes
 import com.mikhilnaika.continueapp.core.design.ContinueSpacing
@@ -187,8 +189,10 @@ private fun AddedBanner(
     onDismiss: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val audio = LocalArcadeAudio.current
     LaunchedEffect(message?.id) {
         val id = message?.id ?: return@LaunchedEffect
+        if (message.fresh) audio.play(Sfx.ADD)
         delay(BANNER_MS)
         onDismiss(id)
     }

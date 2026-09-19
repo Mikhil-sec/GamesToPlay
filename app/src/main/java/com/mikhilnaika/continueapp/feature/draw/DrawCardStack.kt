@@ -39,6 +39,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.mikhilnaika.continueapp.core.audio.LocalArcadeAudio
+import com.mikhilnaika.continueapp.core.audio.Sfx
 import com.mikhilnaika.continueapp.core.design.ContinueColors
 import com.mikhilnaika.continueapp.core.design.ContinueMotion
 import com.mikhilnaika.continueapp.core.design.ContinueSpacing
@@ -171,9 +173,11 @@ private fun DealingIndicator(count: Int) {
 @Composable
 private fun EjectedCard(index: Int, total: Int, width: Dp, height: Dp, slotDropPx: Float) {
     var ejected by remember { mutableStateOf(false) }
+    val audio = LocalArcadeAudio.current
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(index * DEAL_STAGGER_MS)
         ejected = true
+        audio.play(Sfx.DEAL)
     }
 
     // Springy rather than tweened: a card leaving a machine has momentum, and the small
@@ -253,9 +257,11 @@ private fun SwipeableCard(
     val offsetY = remember(key) { Animatable(0f) }
     val scope = rememberCoroutineScope()
     var flipped by remember(key) { mutableStateOf(false) }
+    val audio = LocalArcadeAudio.current
     LaunchedEffect(key) {
         kotlinx.coroutines.delay(60)
         flipped = true
+        audio.play(Sfx.FLIP)
     }
     val rotationY by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (flipped) 0f else 180f,
@@ -294,6 +300,9 @@ private fun SwipeableCard(
                         val verdict = resolveVerdict(Offset(offsetX.value, offsetY.value), velocity)
                         if (verdict != null) {
                             haptics?.heavy()
+                            // PLAYING IT is a decision worth a fanfare; the other three are
+                            // the card being put somewhere, and just move air.
+                            audio.play(if (verdict == SwipeVerdict.PLAYING_IT) Sfx.SELECT else Sfx.WHOOSH)
                             val target = exitTarget(verdict)
                             animateOffsetTo(target, tween(220))
                             scope.launch {

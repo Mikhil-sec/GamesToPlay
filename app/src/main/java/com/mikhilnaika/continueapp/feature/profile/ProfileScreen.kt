@@ -1,6 +1,7 @@
 package com.mikhilnaika.continueapp.feature.profile
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,6 +43,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil3.compose.AsyncImage
+import com.mikhilnaika.continueapp.core.audio.LocalArcadeAudio
+import com.mikhilnaika.continueapp.core.audio.MusicCue
+import com.mikhilnaika.continueapp.core.audio.MusicPack
+import com.mikhilnaika.continueapp.core.audio.MusicTrack
+import com.mikhilnaika.continueapp.core.audio.Sfx
 import com.mikhilnaika.continueapp.core.design.ContinueColors
 import com.mikhilnaika.continueapp.core.design.ContinueSpacing
 import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
@@ -180,11 +186,34 @@ fun ProfileScreen(
 
         item { SectionHeader("SETTINGS") }
         item {
+            // Sound first: it's the setting people reach for fastest, usually mid-meeting.
+            // Both follow the phone's silent switch regardless, and say so.
+            SettingsToggleRow(
+                label = "SOUND",
+                description = "Coins, the lever, the card deal. Follows your media volume; off when your phone is on silent.",
+                checked = state.soundEffectsEnabled,
+                onCheckedChange = viewModel::setSoundEffectsEnabled,
+            )
+            SettingsToggleRow(
+                label = "MUSIC",
+                description = "The title theme, the CONTINUE? countdown, the shop and the credits. " +
+                    "Never plays over your own music.",
+                checked = state.musicEnabled,
+                onCheckedChange = viewModel::setMusicEnabled,
+            )
             SettingsToggleRow(
                 label = "HAPTICS",
                 description = "Buzz on the lever, the stack and a clear.",
                 checked = state.hapticsEnabled,
                 onCheckedChange = viewModel::setHapticsEnabled,
+            )
+            MusicPackPicker(
+                selected = state.musicPack,
+                owned = state.ownedMusicPacks,
+                coins = state.coinBalance,
+                message = state.musicPackMessage,
+                onSelect = viewModel::selectMusicPack,
+                onUnlock = viewModel::unlockMusicPack,
             )
             SettingsToggleRow(
                 label = "CLIPBOARD DETECTION",
@@ -433,6 +462,117 @@ private fun SettingsActionRow(label: String, description: String, onClick: () ->
             color = ContinueColors.TextTertiary,
             modifier = Modifier.padding(top = 2.dp),
         )
+    }
+}
+
+/**
+ * MUSIC PACK — three soundtracks, one chosen. Each card says what it sounds like in words,
+ * offers a PREVIEW so nobody spends coins blind, and shows exactly one action: what's selected,
+ * USE for a pack already owned, or the coin price for one that isn't.
+ *
+ * The preview plays the pack's title theme right here, and stops when you tap it again, pick
+ * another, or leave YOU — [MusicCue] ties it to this screen's lifetime.
+ */
+@Composable
+private fun MusicPackPicker(
+    selected: MusicPack,
+    owned: Set<MusicPack>,
+    coins: Int,
+    message: String?,
+    onSelect: (MusicPack) -> Unit,
+    onUnlock: (MusicPack) -> Unit,
+) {
+    val audio = LocalArcadeAudio.current
+    var previewing by remember { mutableStateOf<MusicPack?>(null) }
+    previewing?.let { MusicCue(MusicTrack.TITLE, preview = it) }
+
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = ContinueSpacing.SM.dp)) {
+        Text(text = "MUSIC PACK", style = ContinueTextStyles.body, color = ContinueColors.TextPrimary)
+        Text(
+            text = "What the title screen, the CONTINUE? countdown, the shop and the credits play.",
+            style = ContinueTextStyles.label,
+            color = ContinueColors.TextTertiary,
+        )
+        MusicPack.entries.forEach { pack ->
+            val isSelected = pack == selected
+            val isOwned = pack in owned
+            Column(
+                modifier = Modifier
+                    .padding(top = ContinueSpacing.SM.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(ContinueColors.SurfaceRaised)
+                    .border(
+                        width = if (isSelected) 2.dp else 1.dp,
+                        color = if (isSelected) ContinueColors.AccentNeon else ContinueColors.OutlineDim,
+                        shape = RoundedCornerShape(12.dp),
+                    )
+                    .padding(ContinueSpacing.MD.dp),
+            ) {
+                Text(text = pack.title, style = ContinueTextStyles.titleM, color = ContinueColors.TextPrimary)
+                Text(text = pack.vibe, style = ContinueTextStyles.label, color = ContinueColors.TextSecondary)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = ContinueSpacing.SM.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = if (previewing == pack) "■ STOP" else "▶ PREVIEW",
+                        style = ContinueTextStyles.label,
+                        color = ContinueColors.AccentCool,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                audio.play(Sfx.BLIP)
+                                previewing = if (previewing == pack) null else pack
+                            }
+                            .padding(vertical = 6.dp, horizontal = 4.dp),
+                    )
+                    androidx.compose.foundation.layout.Spacer(modifier = Modifier.weight(1f))
+                    when {
+                        isSelected -> Text(
+                            text = "✓ PLAYING",
+                            style = ContinueTextStyles.label,
+                            color = ContinueColors.AccentNeon,
+                        )
+                        isOwned -> Text(
+                            text = "USE",
+                            style = ContinueTextStyles.label,
+                            color = ContinueColors.AccentCoin,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    audio.play(Sfx.SELECT)
+                                    previewing = null
+                                    onSelect(pack)
+                                }
+                                .padding(vertical = 6.dp, horizontal = 8.dp),
+                        )
+                        else -> Text(
+                            text = "UNLOCK · ${pack.price} COINS",
+                            style = ContinueTextStyles.label,
+                            color = if (coins >= pack.price) ContinueColors.AccentCoin else ContinueColors.TextTertiary,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    // The coin sound is the purchase; the counter above spins.
+                                    if (coins >= pack.price) audio.play(Sfx.COIN) else audio.play(Sfx.ERROR)
+                                    previewing = null
+                                    onUnlock(pack)
+                                }
+                                .padding(vertical = 6.dp, horizontal = 8.dp),
+                        )
+                    }
+                }
+            }
+        }
+        if (message != null) {
+            Text(
+                text = message,
+                style = ContinueTextStyles.label,
+                color = ContinueColors.AccentHot,
+                modifier = Modifier.padding(top = ContinueSpacing.SM.dp),
+            )
+        }
     }
 }
 

@@ -5,7 +5,21 @@
 > what's next. Update it whenever you finish a chunk of work or discover something that
 > changes this picture — don't let it go stale like a comment nobody re-reads.
 >
-> Last updated: **2026-09-19** — ✅ **`versionCode 11` is live in production and tested on a
+> ✅ **2026-09-19 (latest): `versionCode 14` verified on device by Mikhil** — AdMob SSV + both
+> RevenueCat reward rules configured; verified ads, FREE PLAY, coin bridge, music packs and levels
+> all working. **Code freeze from here**: next is promoting 14 to production, then the submission.
+>
+> Last updated: **2026-09-19 (late)** — now **`versionCode 14` / `0.14.0`**: after two device
+> tests, lower music/effect levels and **three music packs** (ARCADE free; AFTER HOURS and NEON
+> DRIVE for 5 coins each, picked in YOU). See the v12 entry's device-test notes.
+>
+> Earlier the same evening — **`versionCode 12` / `0.12.0` built and signed**:
+> sound and music, a real CRT cold open, **RevenueCat-verified rewarded ads**, **FREE PLAY** (one
+> ad → 60 minutes of real `pro`), the **RevenueCat COIN bridge** that makes "50-COIN DROPS" true,
+> and RevenueCat ad-event tracking. **209 app tests, 0 failures.** 🔴 Needs two dashboard steps
+> and a device check before production — `docs/09` top. See the 2026-09-19 (v12) entry.
+>
+> Previous: **2026-09-19** — ✅ **`versionCode 11` is live in production and tested on a
 > device: the FRIENDS share loop works end to end.** ✅ **AdMob is sorted**: app-ads.txt verified,
 > and the Play listing is linked to the AdMob app that v11 actually uses. ✅ Privacy policy §3b
 > (FRIENDS) is live. What's left before Sept 30 is the **submission**, not the app; see the
@@ -121,6 +135,112 @@
 > RevenueCat, which shows real customer records tagged `0.2.0` and `0.3.0`. Only *Closed*
 > testing has stayed on `versionCode 4` throughout; Internal testing has been iterated on the
 > whole time. "Never uploaded" below refers only to the Closed track.
+
+---
+
+## 2026-09-19 (v12) — sound, FREE PLAY, and RevenueCat doing the rewarding
+
+Decided with Mikhil: one last bounded sprint, code freeze **2026-09-21**, then submission only.
+Built and signed as **`versionCode 12` / `0.12.0`** (Internal track), then **`versionCode 13` / `0.13.0`** with the device-test fixes below (34.0 MB; `jarsigner` clean; bundle checked
+for `0.12.0`, 18 `res/raw/*.ogg`, the new strings present and "A MONTHLY COIN DROP" /
+"IMPORT FROM STEAM" absent). **Compiles, tested where testable, NOT yet on a device.**
+
+**1. Sound and music — all original, synthesised, CC0.** `tools/make_audio.py` generates 14
+effects and 4 tracks from oscillators and seeded noise (no samples from anyone), so there is no
+upstream licence to track; `docs/AUDIO-LICENSE.md` dedicates them to the public domain and maps
+each file to where it plays. `core/audio/ArcadeAudio.kt` is the only way to make a sound, and it
+enforces **SOUND** and **MUSIC** (two new toggles in YOU) itself — same shape as `Haptics`, for
+the same reason. Also: silent/vibrate mode mutes everything; music never starts over the user's
+own audio (`isMusicActive`); no audio focus is taken; `USAGE_GAME`, so the screen recorder
+captures it for the video. `MusicCue` ties a track to a screen *and* the lifecycle, so home on the
+CONTINUE? screen doesn't leave its loop playing. Music plays in four places only: onboarding
+(title theme), the CONTINUE? gate (countdown loop), GO PRO (shop loop), Credits Roll (fanfare).
+Two small bugs caught in the sound code while building it: a fade-out cancelled by the next track
+would have leaked a half-loud `MediaPlayer`; and the coin counter would have chimed on every
+launch (its placeholder 0 → real balance looked like coins arriving).
+
+**2. Cold open.** The first screen a judge sees was a plain `Text` and a Material button. Now a
+CRT power-on (beam line → opens vertically, glare cooling off, tap to skip), a glowing marquee, a
+blinking INSERT COIN, the CRT sound and the title theme. The disabled **"IMPORT FROM STEAM
+(COMING SOON)"** button is gone — a "coming soon" in the first 30 seconds of a judged app.
+
+**3. The coin drop is real now.** RevenueCat's `COIN` virtual currency already granted **50 on
+every PRO purchase and renewal** (`trial_amount 0`) — checked via the MCP — and nothing read it.
+`BillingRepository.syncStoreCoins()` invalidates the SDK cache, reads the `COIN` balance and
+`CoinLedger.reconcileStoreBalance()` credits only growth since the last look (RevenueCat's balance
+only goes up from the app's side; spending stays local and offline). Runs at launch and on every
+customer-info update, which is when renewals land. `storeGrantSince` is a pure function with 6
+tests. A `CoinDropBanner` announces grants ≥10 on any screen. The paywall perk now reads **"50-COIN
+DROPS — 50 coins when you join. On Monthly, 50 more every renewal."**, which is true per tier.
+Side effect worth knowing: testers' existing RevenueCat balances (600–4,250) land on their first v12
+launch. Deliberate — they're grants RevenueCat made — and it also means bought coins survive a
+reinstall.
+
+**4. Rewarded ads verified by RevenueCat, and FREE PLAY.** `purchases` 10.12 already shipped
+RevenueCat's reward-verification API (experimental opt-in). `RealAdRepository` now attaches a
+RevenueCat token to each impression as AdMob SSV custom data, and after the ad polls RevenueCat for
+the verified result (10 s cap). **INSERT COIN**: RevenueCat grants 1 COIN server-side and the
+bridge reads it in; if verification can't complete, the app pays the coin locally so nobody
+watches an ad for nothing (worst case: one coin counted twice if a late verification lands).
+**FREE PLAY** (new, on the CONTINUE? gate and on GO PRO): the verified reward is the real `pro`
+entitlement for 60 minutes; no client fallback, an unverified watch says so. Because the SDK's
+`isActive` doesn't re-evaluate when a clock runs out, `RealBillingRepository` now ends PRO locally
+at its expiry and re-fetches. The top bar shows **`FREE PLAY 59:12`** on every screen while it runs
+(recognised by length: anything sold lasts ≥7 days). Shared logic in `core/ads/FreePlay.kt`.
+Also fixed on the way: **closing a rewarded ad early never resumed `show()`**, so the CONTINUE?
+screen could spin forever; dismissal now always answers.
+
+**5. RevenueCat ad tracking.** Load, fail-to-load, impression, click and paid (revenue, with
+AdMob's precision) events go to `Purchases.adTracker`, so ad revenue sits next to subscription
+revenue per customer in RevenueCat — the Catvertising story.
+
+**Privacy.** `docs/privacy.html` §5 now says RevenueCat verifies rewards and records ad events
+against the anonymous ID (no advertising ID sent); it also dropped a pre-existing false line that
+coins can be "bought outright". No new Data Safety declarations — reasoning in `docs/13`.
+
+**First device test (Mikhil, Internal track, same day) → rebuilt as `versionCode 12` again:**
+- **"+1150 COINS" on first launch was correct, and exposed a wrong assumption of mine.**
+  RevenueCat said that install's COIN balance was exactly 1,150. The grants are **Lifetime → 600**
+  (it shares the 600 group with the coin pack) and **Monthly → 50 per renewal**, and sandbox
+  Monthly renews every ~5 minutes: 600 + 11×50 = 1,150. Real users: 600 once for Lifetime, 50 a
+  month for Monthly. The paywall perk now says exactly that ("Lifetime: 600 coins up front.
+  Monthly: 50 more every month."). **If the grant amounts in RevenueCat ever change, that line
+  must change with them.**
+- **No sound at all.** Two causes fixed. (1) Sounds requested before SoundPool had finished
+  decoding were silently dropped, and the launch-time coin-drop banner is exactly that case; they
+  are now queued and played on load. (2) Vibrate mode muted everything. That's not the Android
+  convention (media volume governs game sound) and would silence the app for any judge who keeps
+  their phone on vibrate, so now only full **silent** mutes it. Also note: THE PILE is nearly
+  silent by design, and a Pro user never sees the CONTINUE? gate, so test sound on DRAW (lever,
+  deal), any arcade button, STACK scrolling, clearing a game (Credits Roll music), and GO PRO.
+
+**Second device test → `versionCode 14` / `0.14.0`** (13 was built but may not have been
+uploaded; 14 avoids a collision either way). Sound confirmed working on Mikhil's phone; feedback:
+music far too loud (50% phone volume "sounded like 90%"), effects too loud ("like 75%"), and the
+arcade music is "very arcade gimmick, lots of high pitch" — not to everyone's taste.
+- **Levels:** every music track is now mastered to the same **RMS** (−16 dBFS; it was peak-
+  normalised, which let the dense square waves sound far louder than they metered) and played at
+  ~0.2–0.3 in-app — about 10 dB down. Effects cut ~5 dB. Arcade music lowpassed at 6 kHz with the
+  hats halved.
+- **Three music packs**, picked in YOU → MUSIC PACK (`core/audio/MusicPack.kt`): **ARCADE** (free,
+  default), **AFTER HOURS** (lo-fi: FM e-piano, pads, brushes — the calm one Mikhil asked for) and
+  **NEON DRIVE** (synthwave — Claude's pick: as retro as the cabinet but warm instead of chirpy).
+  The two extras cost **5 coins** each (a coin sink people want, which is what gives INSERT COIN
+  its point). Every card has PREVIEW, which plays that pack's title theme on the spot — even with
+  MUSIC off, since it's an explicit tap — and stops when you leave YOU. Changing pack while a
+  track plays swaps it immediately. Unlocks are local, like the coins that bought them. The spend
+  happens before the unlock is written, so a crash between them can cost coins but can never give
+  a free pack. 4 new tests (213 total).
+- **RevenueCat reward rules can't be created from the MCP** — it has no Ads/Rewards tools. Mikhil
+  creates them in the dashboard (steps in `docs/09`).
+
+**Still NOT done / not verified:**
+- The two dashboard steps (AdMob SSV URL per unit; RevenueCat reward rules). Until they're done,
+  INSERT COIN works via the local fallback and **FREE PLAY can only fail** — see `docs/09`.
+- Nothing from v12 has been on a device. The audio has not been listened to by a human yet
+  (the synthesiser's output was checked numerically: peaks < 0.93 after Vorbis, no NaNs,
+  loop seams < 0.02). Sound-check page: open each `res/raw/*.ogg`.
+- The debug build can't show FREE PLAY working (Fake repos); only a release build can.
 
 ---
 

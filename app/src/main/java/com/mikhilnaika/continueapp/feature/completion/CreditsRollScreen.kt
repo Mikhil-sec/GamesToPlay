@@ -29,6 +29,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil3.compose.AsyncImage
+import com.mikhilnaika.continueapp.core.audio.LocalArcadeAudio
+import com.mikhilnaika.continueapp.core.audio.MusicCue
+import com.mikhilnaika.continueapp.core.audio.MusicTrack
+import com.mikhilnaika.continueapp.core.audio.Sfx
 import com.mikhilnaika.continueapp.core.design.ContinueColors
 import com.mikhilnaika.continueapp.core.design.ContinueSpacing
 import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
@@ -57,7 +61,12 @@ fun CreditsRollScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val haptics = LocalHaptics.current
+    val audio = LocalArcadeAudio.current
     var step by remember { mutableIntStateOf(STEP_FLASH) }
+
+    // The fanfare is written to land its big chord ~3.5s in, as the credits finish rolling,
+    // and plays once. Skipping the cinematic doesn't cut it: finishing a game earned the tune.
+    if (!state.isLoading) MusicCue(MusicTrack.VICTORY)
     var skipped by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.isLoading) {
@@ -73,6 +82,9 @@ fun CreditsRollScreen(
         if (skipped) return@LaunchedEffect
         step = STEP_COINS
         haptics.celebratory()
+        // The top bar (and its coin counter) is hidden during the cinematic, so the payout
+        // makes its own sound here. A replay that earns nothing stays quiet, same as the text.
+        if (state.coinsAwarded > 0) audio.play(Sfx.COIN_DROP)
         delay(900)
         if (skipped) return@LaunchedEffect
         step = STEP_RANK_BUTTON
@@ -187,6 +199,7 @@ fun CreditsRollScreen(
 
 @Composable
 private fun TypewriterTitle(fullText: String, active: Boolean) {
+    val audio = LocalArcadeAudio.current
     var shown by remember(fullText) { mutableIntStateOf(if (active) 0 else fullText.length) }
     LaunchedEffect(active) {
         if (!active) {
@@ -195,6 +208,7 @@ private fun TypewriterTitle(fullText: String, active: Boolean) {
         }
         for (i in 1..fullText.length) {
             shown = i
+            if (!fullText[i - 1].isWhitespace()) audio.play(Sfx.TICK)
             delay(60)
         }
     }

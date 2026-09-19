@@ -271,6 +271,15 @@ Declare exactly these five, and nothing else:
 - **Contacts, calendar, SMS, call logs, files, health, messages.** Not touched.
 - **Precise location.** No location permission is requested.
 
+**v12's RevenueCat ad events and reward verification (2026-09-19) add no new Data Safety
+declarations.** RevenueCat now receives, per anonymous app user ID, that a rewarded ad loaded, was
+shown or was tapped, its estimated revenue, and the verified reward. That is **App activity → App
+interactions**, already declared above for Analytics and Fraud prevention & security; RevenueCat
+is a service provider processing it for us, so it is not "sharing" in Play's definition. No new
+identifier is sent (no advertising ID goes to RevenueCat). Privacy policy §5 was updated to say
+this in plain words, and to drop a sentence claiming coins can be bought outright, which no build
+has ever allowed.
+
 **The share feature (2026-09-12) adds no new Data Safety declarations.** Checked deliberately,
 because it looks like it should. Sharing draws the card on-device from data already on-device,
 writes it to the app's own cache, and hands it to Android's share sheet — **the app makes no

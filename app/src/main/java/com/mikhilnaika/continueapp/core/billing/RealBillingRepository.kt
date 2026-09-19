@@ -11,7 +11,15 @@ import com.mikhilnaika.continueapp.core.data.CoinLedger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import com.revenuecat.purchases.CacheFetchPolicy
+import com.revenuecat.purchases.awaitGetVirtualCurrencies
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -25,10 +33,11 @@ import kotlin.coroutines.resume
  * docs/05-TECH-ARCHITECTURE.md even with no products configured yet, and gets the anonymous
  * app-user ID flowing.
  *
- * Entitlements (`pro`) are read from RevenueCat and are authoritative. **Coins are not** —
- * they're held in [CoinLedger] on-device, because the coin economy gates DRAW and CLAUDE.md's
- * constraint #5 requires that to work offline. See [CoinLedger] for why that's the right
- * trade-off today and what replaces it once AdMob server-side verification is possible.
+ * Entitlements (`pro`) are read from RevenueCat and are authoritative. **Coins are spent
+ * locally** — they're held in [CoinLedger] on-device, because the coin economy gates DRAW and
+ * CLAUDE.md's constraint #5 requires that to work offline — but every coin RevenueCat *grants*
+ * (PRO purchases and renewals, verified rewarded ads) is read from RevenueCat's COIN virtual
+ * currency and folded in by [syncStoreCoins]. See [CoinLedger.reconcileStoreBalance].
  */
 @Singleton
 class RealBillingRepository @Inject constructor(
@@ -43,6 +52,15 @@ class RealBillingRepository @Inject constructor(
     private val _coinBalance = MutableStateFlow(0)
     override val coinBalance: StateFlow<Int> = _coinBalance
 
+    private val _coinDrops = MutableSharedFlow<Int>(extraBufferCapacity = 4)
+    override val coinDrops: SharedFlow<Int> = _coinDrops
+
+    /** One reconcile at a time: launch, a purchase and a foreground refresh can all ask at once. */
+    private val syncLock = Mutex()
+
+    /** Ends PRO locally at its expiry — see [applyCustomerInfo]. */
+    private var expiryJob: Job? = null
+
     /** Singleton-scoped, so it lives as long as the process — nothing to cancel. */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -50,17 +68,64 @@ class RealBillingRepository @Inject constructor(
         scope.launch { coinLedger.balance.collect { _coinBalance.value = it } }
         Purchases.sharedInstance.updatedCustomerInfoListener = UpdatedCustomerInfoListener { info ->
             applyCustomerInfo(info)
+            // Customer info changes when something was bought or renewed — exactly when
+            // RevenueCat has just granted COIN. This is how the monthly drop arrives.
+            scope.launch { syncStoreCoins() }
         }
+        scope.launch { syncStoreCoins() }
         Purchases.sharedInstance.getCustomerInfo(object : com.revenuecat.purchases.interfaces.ReceiveCustomerInfoCallback {
             override fun onReceived(customerInfo: CustomerInfo) = applyCustomerInfo(customerInfo)
             override fun onError(error: PurchasesError) = Unit
         })
     }
 
+    /**
+     * `isActive` is RevenueCat's verdict *as of the fetch*, and the SDK doesn't re-fetch just
+     * because a clock ran out. That never mattered for a month-long subscription; it matters a
+     * lot for FREE PLAY, whose whole promise is sixty minutes. So PRO also ends locally at its
+     * expiry date, and a fresh fetch then confirms (or renews) it.
+     */
     private fun applyCustomerInfo(info: CustomerInfo) {
         val entitlement = info.entitlements[ENTITLEMENT_PRO]
-        _isPro.value = entitlement?.isActive == true
-        _proExpiresAt.value = entitlement?.expirationDate?.time
+        val expiresAt = entitlement?.expirationDate?.time
+        val active = entitlement?.isActive == true && (expiresAt == null || expiresAt > System.currentTimeMillis())
+        _isPro.value = active
+        _proExpiresAt.value = if (active) expiresAt else null
+        expiryJob?.cancel()
+        if (active && expiresAt != null) {
+            expiryJob = scope.launch {
+                delay((expiresAt - System.currentTimeMillis()).coerceAtLeast(0))
+                _isPro.value = false
+                _proExpiresAt.value = null
+                refreshEntitlements()
+            }
+        }
+    }
+
+    override suspend fun syncStoreCoins(): Int = syncLock.withLock {
+        val balance = runCatching {
+            // Balances are cached by the SDK; a grant made server-side is invisible until the
+            // cache is dropped. Cheap: one small request, only on the events that can grant.
+            Purchases.sharedInstance.invalidateVirtualCurrenciesCache()
+            Purchases.sharedInstance.awaitGetVirtualCurrencies().all[COIN_CODE]?.balance
+        }.getOrNull() ?: return 0
+        val credited = coinLedger.reconcileStoreBalance(balance)
+        if (credited > 0) _coinDrops.tryEmit(credited)
+        credited
+    }
+
+    override suspend fun refreshEntitlements() = suspendCancellableCoroutine { cont ->
+        Purchases.sharedInstance.getCustomerInfo(
+            CacheFetchPolicy.FETCH_CURRENT,
+            object : com.revenuecat.purchases.interfaces.ReceiveCustomerInfoCallback {
+                override fun onReceived(customerInfo: CustomerInfo) {
+                    applyCustomerInfo(customerInfo)
+                    cont.resume(Unit)
+                }
+
+                override fun onError(error: PurchasesError) = cont.resume(Unit)
+            },
+        )
     }
 
     override suspend fun purchase(activity: Activity, pkg: Package): PurchaseResult = suspendCancellableCoroutine { cont ->
@@ -196,5 +261,8 @@ class RealBillingRepository @Inject constructor(
 
     companion object {
         const val ENTITLEMENT_PRO = "pro"
+
+        /** The RevenueCat virtual currency code — `COIN`, "Coins" (CLAUDE.md). */
+        const val COIN_CODE = "COIN"
     }
 }

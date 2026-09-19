@@ -21,8 +21,11 @@ import javax.inject.Singleton
  * with the *secret* key, which must never ship in a public repo's APK.
  *
  * So: coins **earned** in-app (rewarded ads, clearing a game, streaks) are authoritative here,
- * and coins **purchased** are granted by RevenueCat server-side on the purchase and folded in
- * via [creditPurchased].
+ * and coins **granted by RevenueCat** — 50 COIN on every PRO purchase and every monthly renewal,
+ * configured as a virtual-currency product grant — are folded in by [reconcileStoreBalance].
+ * The two balances are deliberately not the same number: RevenueCat's only ever goes *up* (the
+ * app spends locally and offline, and can't debit RevenueCat without the secret key), so it is
+ * read as a running total of grants, and only the growth since the last look is credited.
  *
  * **This is deliberately not fraud-proof, and that's the right call for now.** A determined
  * user could clear app data to reset. The alternative — AdMob server-side verification (SSV)
@@ -49,6 +52,9 @@ class CoinLedger @Inject constructor(
          * instead of inventing another one that has to be remembered about.
          */
         val CLAIMED_REWARDS = stringSetPreferencesKey("claimed_rewards")
+
+        /** RevenueCat's COIN balance as of the last reconcile — see [reconcileStoreBalance]. */
+        val STORE_BALANCE_SEEN = intPreferencesKey("store_balance_seen")
     }
 
     /** Enough for one DRAW on first launch, so the economy is discoverable before it bites. */
@@ -108,8 +114,28 @@ class CoinLedger @Inject constructor(
     suspend fun isClaimed(rewardKey: String): Boolean =
         dataStore.data.map { it[Keys.CLAIMED_REWARDS].orEmpty() }.first().contains(rewardKey)
 
-    /** Credits coins that RevenueCat granted for a real purchase. */
-    suspend fun creditPurchased(amount: Int): Int = adjust(amount, Keys.LIFETIME_PURCHASED)
+    /**
+     * Folds RevenueCat's COIN balance into this one: credits whatever RevenueCat has granted
+     * since the last call, and nothing else.
+     *
+     * Check and write share one `edit` transaction, so the launch-time sync and a purchase
+     * callback landing together can't both credit the same grant.
+     *
+     * @return the coins credited (0 when nothing new arrived).
+     */
+    suspend fun reconcileStoreBalance(storeBalance: Int): Int {
+        var credited = 0
+        dataStore.edit { prefs ->
+            val seen = prefs[Keys.STORE_BALANCE_SEEN] ?: 0
+            credited = storeGrantSince(seen, storeBalance)
+            prefs[Keys.STORE_BALANCE_SEEN] = storeBalance
+            if (credited > 0) {
+                prefs[Keys.BALANCE] = (prefs[Keys.BALANCE] ?: startingBalance) + credited
+                prefs[Keys.LIFETIME_PURCHASED] = (prefs[Keys.LIFETIME_PURCHASED] ?: 0) + credited
+            }
+        }
+        return credited
+    }
 
     /**
      * Debits [amount] if affordable.
@@ -141,3 +167,11 @@ class CoinLedger @Inject constructor(
         return updated
     }
 }
+
+/**
+ * How many coins RevenueCat has granted since [seen]. Only growth counts: if RevenueCat's
+ * balance ever goes *down* (a refund clawing a grant back, a manual adjustment in the
+ * dashboard), the baseline follows it down so the next real grant is still credited in full —
+ * but coins already credited here are never taken back out of someone's cabinet.
+ */
+internal fun storeGrantSince(seen: Int, storeBalance: Int): Int = (storeBalance - seen).coerceAtLeast(0)

@@ -56,6 +56,8 @@ fun ArcadeScaffold(
      * The status-bar inset is consumed either way — see [ArcadeTopBar].
      */
     showCoinCounter: Boolean = true,
+    /** Non-null while FREE PLAY runs; its clock shows in the top bar on every screen. */
+    freePlayEndsAt: Long? = null,
     content: @Composable (Modifier) -> Unit,
 ) {
     Scaffold(
@@ -65,7 +67,12 @@ fun ArcadeScaffold(
             // Roll, RANK, share card) are cinematic and must stay chrome-free, and they draw
             // their own status-bar handling.
             if (showBottomBar) {
-                ArcadeTopBar(coinBalance = coinBalance, isPro = isPro, showCoinCounter = showCoinCounter)
+                ArcadeTopBar(
+                    coinBalance = coinBalance,
+                    isPro = isPro,
+                    showCoinCounter = showCoinCounter,
+                    freePlayEndsAt = freePlayEndsAt,
+                )
             }
         },
         bottomBar = {
@@ -111,21 +118,27 @@ fun ArcadeScaffold(
  * rather than simply sit higher.
  */
 @Composable
-private fun ArcadeTopBar(coinBalance: Int, isPro: Boolean, showCoinCounter: Boolean) {
+private fun ArcadeTopBar(coinBalance: Int, isPro: Boolean, showCoinCounter: Boolean, freePlayEndsAt: Long?) {
+    // FREE PLAY is shown everywhere, not only where the coin counter is: an hour that is
+    // running out should be visible on whatever screen it's being spent on.
+    val showBar = showCoinCounter || freePlayEndsAt != null
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(ContinueColors.SurfaceCabinet)
             .windowInsetsPadding(WindowInsets.statusBars)
             .then(
-                if (showCoinCounter) Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                if (showBar) Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
                 else Modifier,
             ),
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (freePlayEndsAt != null) {
+            FreePlayBadge(endsAtMillis = freePlayEndsAt, modifier = Modifier.weight(1f))
+        }
         if (showCoinCounter) {
-            if (isPro) {
+            if (isPro && freePlayEndsAt == null) {
                 Text(
                     text = "PRO",
                     style = ContinueTextStyles.label,

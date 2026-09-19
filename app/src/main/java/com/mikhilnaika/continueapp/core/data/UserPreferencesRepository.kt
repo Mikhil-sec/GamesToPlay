@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -20,6 +21,10 @@ class UserPreferencesRepository @Inject constructor(
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
         val CLIPBOARD_DETECTION_ENABLED = booleanPreferencesKey("clipboard_detection_enabled")
         val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
+        val SOUND_EFFECTS_ENABLED = booleanPreferencesKey("sound_effects_enabled")
+        val MUSIC_ENABLED = booleanPreferencesKey("music_enabled")
+        val MUSIC_PACK = stringPreferencesKey("music_pack")
+        val UNLOCKED_MUSIC_PACKS = stringSetPreferencesKey("unlocked_music_packs")
         val PILE_VIEW_MODE = stringPreferencesKey("pile_view_mode")
         val STACK_SWIPE_HINT_SEEN = booleanPreferencesKey("stack_swipe_hint_seen")
         val HOURS_PER_WEEK = floatPreferencesKey("hours_per_week")
@@ -45,6 +50,41 @@ class UserPreferencesRepository @Inject constructor(
 
     suspend fun setHapticsEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.HAPTICS_ENABLED] = enabled }
+    }
+
+    /** SOUND in YOU. Read only by [com.mikhilnaika.continueapp.core.audio.ArcadeAudio]. */
+    val isSoundEffectsEnabled: Flow<Boolean> =
+        dataStore.data.map { it[Keys.SOUND_EFFECTS_ENABLED] ?: true }
+
+    suspend fun setSoundEffectsEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.SOUND_EFFECTS_ENABLED] = enabled }
+    }
+
+    /** MUSIC in YOU, separate from SOUND: plenty of people want the coin and not the tune. */
+    val isMusicEnabled: Flow<Boolean> =
+        dataStore.data.map { it[Keys.MUSIC_ENABLED] ?: true }
+
+    suspend fun setMusicEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.MUSIC_ENABLED] = enabled }
+    }
+
+    /**
+     * The chosen music pack's id — see `core/audio/MusicPack`. Stored as the raw id for the same
+     * reason as [pileViewMode]: core/data shouldn't name a type from another layer, and the
+     * caller decides what an unknown id falls back to.
+     */
+    val musicPackId: Flow<String?> = dataStore.data.map { it[Keys.MUSIC_PACK] }
+
+    suspend fun setMusicPackId(id: String) {
+        dataStore.edit { it[Keys.MUSIC_PACK] = id }
+    }
+
+    /** Pack ids bought with coins. Local, like the coin balance they were paid from. */
+    val unlockedMusicPackIds: Flow<Set<String>> =
+        dataStore.data.map { it[Keys.UNLOCKED_MUSIC_PACKS].orEmpty() }
+
+    suspend fun addUnlockedMusicPack(id: String) {
+        dataStore.edit { it[Keys.UNLOCKED_MUSIC_PACKS] = it[Keys.UNLOCKED_MUSIC_PACKS].orEmpty() + id }
     }
 
     /**

@@ -52,6 +52,7 @@ fun ContinueNavHost(
 ) {
     val coinBalance by chromeViewModel.coinBalance.collectAsState()
     val isPro by chromeViewModel.isPro.collectAsState()
+    val freePlayEndsAt by chromeViewModel.freePlayEndsAt.collectAsState()
     val startDestination = if (onboardingComplete) NavDestinations.PILE else NavDestinations.ONBOARDING
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
@@ -89,6 +90,7 @@ fun ContinueNavHost(
         isPro = isPro,
         showBottomBar = showBottomBar,
         showCoinCounter = showCoinCounter,
+        freePlayEndsAt = freePlayEndsAt,
     ) { padding ->
       androidx.compose.foundation.layout.Box(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
         NavHost(navController = navController, startDestination = startDestination, modifier = padding) {
@@ -189,6 +191,13 @@ fun ContinueNavHost(
                 modifier = androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
             )
         }
+
+        // Above the whole graph for the same reason: a RevenueCat coin grant lands whenever
+        // RevenueCat says so, not when the user happens to be on a screen with a coin counter.
+        com.mikhilnaika.continueapp.core.ui.CoinDropBanner(
+            drops = chromeViewModel.coinDrops,
+            modifier = androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.TopCenter),
+        )
       }
     }
 }

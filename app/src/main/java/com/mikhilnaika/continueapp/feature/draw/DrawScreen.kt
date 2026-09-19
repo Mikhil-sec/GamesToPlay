@@ -44,6 +44,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.mikhilnaika.continueapp.core.audio.LocalArcadeAudio
+import com.mikhilnaika.continueapp.core.audio.Sfx
 import com.mikhilnaika.continueapp.core.data.Mood
 import com.mikhilnaika.continueapp.core.data.TimeBudget
 import com.mikhilnaika.continueapp.core.design.ContinueColors
@@ -91,6 +93,7 @@ fun DrawScreen(
         DrawPhase.GATE -> DrawGateScreen(
             state = state,
             onInsertCoin = { context.findActivity()?.let(viewModel::insertCoin) },
+            onFreePlay = { context.findActivity()?.let(viewModel::freePlay) },
             onUseCoin = viewModel::useCoin,
             onGoPro = onGoPro,
             onDismiss = viewModel::dismissGate,
@@ -308,6 +311,7 @@ private const val LEVER_PULL_THRESHOLD_FRACTION = 0.68f
 private fun DrawLever(onPull: () -> Unit, haptics: Haptics, trackHeight: Dp = LEVER_TRACK_HEIGHT) {
     val offsetY = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
+    val audio = LocalArcadeAudio.current
     val density = androidx.compose.ui.platform.LocalDensity.current
     val trackPx = with(density) { trackHeight.toPx() }
     val knobPx = with(density) { LEVER_KNOB_SIZE.toPx() }
@@ -335,6 +339,7 @@ private fun DrawLever(onPull: () -> Unit, haptics: Haptics, trackHeight: Dp = LE
                                 scope.launch { offsetY.animateTo(0f, ContinueMotion.heavy()) }
                                 if (pulled) {
                                     haptics.heavy()
+                                    audio.play(Sfx.LEVER)
                                     onPull()
                                 }
                             },

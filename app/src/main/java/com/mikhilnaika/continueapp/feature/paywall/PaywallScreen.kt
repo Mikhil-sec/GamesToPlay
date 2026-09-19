@@ -58,6 +58,11 @@ import com.mikhilnaika.continueapp.core.design.ContinueTextStyles
 import com.mikhilnaika.continueapp.core.ui.ArcadeButton
 import com.mikhilnaika.continueapp.core.ui.LocalHaptics
 import com.mikhilnaika.continueapp.core.util.findActivity
+import com.mikhilnaika.continueapp.core.ads.FreePlay
+import com.mikhilnaika.continueapp.core.audio.LocalArcadeAudio
+import com.mikhilnaika.continueapp.core.audio.MusicCue
+import com.mikhilnaika.continueapp.core.audio.MusicTrack
+import com.mikhilnaika.continueapp.core.audio.Sfx
 
 /**
  * GO PRO — hand-built rather than RevenueCatUI's dashboard-rendered paywall.
@@ -80,6 +85,12 @@ fun PaywallScreen(
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
     val haptics = LocalHaptics.current
+    val audio = LocalArcadeAudio.current
+
+    // The shop counter. Quiet and unhurried on purpose: a paywall that sounds urgent is a
+    // paywall that feels like it's pushing.
+    MusicCue(MusicTrack.SHOP)
+    LaunchedEffect(state.error) { if (state.error != null) audio.play(Sfx.ERROR) }
 
     // Leaving on success rather than showing a confirmation screen: the entitlement propagates
     // through RevenueCat's customer-info listener, so the screen the user came from is already
@@ -87,6 +98,9 @@ fun PaywallScreen(
     LaunchedEffect(state.purchased) {
         if (state.purchased) {
             haptics.celebratory()
+            // SoundPool plays independently of this screen, so the power-up carries on over the
+            // dismiss rather than being cut off by it.
+            audio.play(Sfx.POWER_UP)
             onDismiss()
         }
     }
@@ -137,6 +151,7 @@ fun PaywallScreen(
                             selected = tier.id == state.selectedTierId,
                             onSelect = {
                                 haptics.light()
+                                audio.play(Sfx.BLIP)
                                 viewModel.selectTier(tier.id)
                             },
                         )
@@ -154,6 +169,12 @@ fun PaywallScreen(
                     FinePrint(tier = state.selectedTier)
 
                     Spacer(modifier = Modifier.height(ContinueSpacing.LG.dp))
+                    FreePlayOffer(
+                        status = state.freePlayStatus,
+                        onStart = { context.findActivity()?.let(viewModel::startFreePlay) },
+                    )
+
+                    Spacer(modifier = Modifier.height(ContinueSpacing.MD.dp))
                     Text(
                         text = if (state.isRestoring) "RESTORING…" else "RESTORE PURCHASE",
                         style = ContinueTextStyles.label,
@@ -180,6 +201,37 @@ fun PaywallScreen(
 
             Spacer(modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars).height(ContinueSpacing.LG.dp))
         }
+    }
+}
+
+/**
+ * FREE PLAY on the paywall: the honest answer to "is it worth it?" is to let people find out.
+ * Secondary to the purchase on purpose — outlined, not filled — but on the same screen, because
+ * the person most likely to watch an ad for an hour of PRO is the one already looking at PRO.
+ */
+@Composable
+private fun FreePlayOffer(status: String?, onStart: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, ContinueColors.AccentHot.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+            .clickable(enabled = status == null, onClick = onStart)
+            .padding(horizontal = ContinueSpacing.LG.dp, vertical = ContinueSpacing.MD.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = status ?: "NOT SURE YET? ▸ FREE PLAY",
+            style = ContinueTextStyles.titleM,
+            color = ContinueColors.AccentHot,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = "Watch one ad for ${FreePlay.MINUTES} minutes of everything above.",
+            style = ContinueTextStyles.label,
+            color = ContinueColors.TextSecondary,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -226,7 +278,10 @@ private fun Marquee() {
 private val PERKS = listOf(
     Triple("∞", "UNLIMITED DRAWS", "Free gets one a day, then the countdown."),
     Triple("▦", "UNLIMITED STACKS", "Free stops at two shelves."),
-    Triple("◈", "A MONTHLY COIN DROP", "Coins land in your cabinet automatically."),
+    // Granted by RevenueCat (COIN product grants: Lifetime 600 once, Monthly 50 per renewal) and
+    // read back in by BillingRepository.syncStoreCoins — so this line is literally true per tier.
+    // If the grants in the RevenueCat dashboard change, this line must change with them.
+    Triple("◈", "COIN DROPS", "Lifetime: 600 coins up front. Monthly: 50 more every month."),
     Triple("◎", "NEVER WATCH AN AD AGAIN", "Ads are always optional here. Now they're gone."),
 )
 

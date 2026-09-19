@@ -2,6 +2,7 @@ package com.mikhilnaika.continueapp.core.billing
 
 import android.app.Activity
 import com.revenuecat.purchases.Package
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
 sealed interface PurchaseResult {
@@ -26,6 +27,25 @@ interface BillingRepository {
     val isPro: StateFlow<Boolean>
     val proExpiresAt: StateFlow<Long?>
     val coinBalance: StateFlow<Int>
+
+    /**
+     * Coins RevenueCat granted that just landed in the cabinet — a PRO purchase or renewal
+     * (50), a verified rewarded ad (1). Emitted once per reconcile that credited anything, so
+     * the app chrome can announce a drop wherever the user happens to be.
+     */
+    val coinDrops: SharedFlow<Int>
+
+    /**
+     * Pulls RevenueCat's COIN balance and credits whatever it granted since the last look.
+     * Safe to call any time; offline it does nothing. Returns the coins credited.
+     */
+    suspend fun syncStoreCoins(): Int
+
+    /**
+     * Re-reads entitlements from RevenueCat — after a verified ad granted temporary PRO, so
+     * FREE PLAY starts the moment the ad closes rather than on the next app launch.
+     */
+    suspend fun refreshEntitlements()
 
     // Deviates from the bare `purchase(pkg)` sketch in docs/05-TECH-ARCHITECTURE.md: the
     // RevenueCat SDK's purchase flow needs a foreground Activity, so it's threaded through.
