@@ -5,7 +5,13 @@
 > what's next. Update it whenever you finish a chunk of work or discover something that
 > changes this picture — don't let it go stale like a comment nobody re-reads.
 >
-> Last updated: **2026-09-18** — **Judge access is now in place store-side**: the 7-day trial
+> Last updated: **2026-09-19** — ✅ **`versionCode 11` is live in production and tested on a
+> device: the FRIENDS share loop works end to end.** ✅ **AdMob is sorted**: app-ads.txt verified,
+> and the Play listing is linked to the AdMob app that v11 actually uses. ✅ Privacy policy §3b
+> (FRIENDS) is live. What's left before Sept 30 is the **submission**, not the app; see the
+> 2026-09-19 entry for the open list.
+>
+> Previous: **2026-09-18** — **Judge access is now in place store-side**: the 7-day trial
 > offer (`trial-feature-monthly`) is live in all 173 regions, and a promo code exists; both still
 > need a device check. The trial had never existed before today; the app needed no change.
 > 🔴 **New finding: bought coins never reach the in-app balance.** Coin packs can't be bought in
@@ -115,6 +121,45 @@
 > RevenueCat, which shows real customer records tagged `0.2.0` and `0.3.0`. Only *Closed*
 > testing has stayed on `versionCode 4` throughout; Internal testing has been iterated on the
 > whole time. "Never uploaded" below refers only to the Closed track.
+
+---
+
+## 2026-09-19 — v11 live and tested; AdMob resolved; the rest is submission work
+
+**Done (confirmed by Mikhil unless noted):**
+- `versionCode 11` / `0.11.0` is **live on the production track**.
+- **On-device tap-through done: the FRIENDS share loop works** (share pile → friend opens the link →
+  pile appears in FRIENDS). This closes the 2026-09-17 "not yet rendered on a device" gap.
+- **AdMob fully resolved.** Two separate problems:
+  1. **No app-ads.txt at the address AdMob checks.** AdMob reads the Play listing's developer
+     website (`https://mikhil-sec.github.io/GamesToPlay/`) and checks the **host root**, which a
+     project Pages site can't serve. Fixed with a separate user-site repo
+     **`Mikhil-sec/Mikhil-sec.github.io`** containing only `app-ads.txt`
+     (`google.com, pub-5970073296518593, DIRECT, f08c47fec0942fa0`); verified serving 200
+     text/plain. **Never delete that repo**; AdMob re-crawls it. It does not affect
+     `/GamesToPlay/…` (Pages serves each repo under its own path).
+  2. **A duplicate AdMob app.** Using "Add app" to attach the Play listing created a *second*
+     AdMob app (`…~7461596117`, 0 ad units) and linked the listing to it. v11 is compiled
+     against the original `…~4180553585`, which owns both rewarded units. The listing was cleared
+     from the duplicate and linked to the original. AdMob apps can't be deleted, only hidden;
+     **never add ad units to `…7461596117`**.
+- **Privacy policy §3b (FRIENDS) is live**: checked on the public URL 2026-09-19 (by Claude).
+- **Consent (UMP) messages are published in AdMob** (Mikhil, 2026-09-18).
+
+**Still open, in priority order:**
+1. **Judge access on a device**: see the 7-day trial badge on GO PRO from a never-subscribed
+   account, and redeem one of the 200 one-time promo codes to confirm PRO unlocks. Store side is
+   verified (2026-09-18). "App has been tested" did not explicitly cover these two.
+2. **Store-listing sentence "a monthly coin drop"** is false in v11 (2026-09-18 entry below).
+   Re-paste the corrected full description from `docs/13-STORE-LISTING.md`. No build needed.
+3. **Decide on a v12 or not.** Only a build can fix the paywall's "A MONTHLY COIN DROP" perk:
+   either drop the line, or bridge RevenueCat's COIN balance into `CoinLedger` via
+   `creditPurchased`. With v11 live, a v12 is an ordinary update, not a restarted production
+   review.
+4. **Devpost submission** (deadline **2026-09-30 11:45pm PDT**): start from
+   `docs/07-SUBMISSION-KIT.md` §"READ FIRST". The old drafts oversell (no FREE PLAY, no SSV, no
+   share themes, no Steam import, and RevenueCat Virtual Currency isn't wired). Still to make:
+   video, screenshots, the three write-ups, judge promo codes in a judges-only field.
 
 ---
 

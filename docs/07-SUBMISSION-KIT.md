@@ -20,7 +20,8 @@ code on 2026-09-18:
 | **Customer Center**, **remote paywalls** | ❌ **Not built.** The GO PRO paywall is hand-built Compose on RevenueCat offerings/entitlements (`docs/04-MONETIZATION.md` §Paywall explains why) | Next Gen, Design |
 | Coins as **RevenueCat Virtual Currency** in the app | ❌ **Checked 2026-09-18: false as a working feature.** Coin packs can't be bought in v11 (no UI, `coins` offering never read); nothing reads RevenueCat's COIN balance; `CoinLedger.creditPurchased` has zero callers. RevenueCat *does* auto-grant COIN on Pro purchases (testers hold 600–4,250 there), but it never reaches the app. Honest framing: "COIN is configured in RevenueCat with purchase auto-grants; the in-app balance is an offline ledger; bridging them is next". **The same applies to "Pro includes a monthly coin drop."** Details: `docs/10` 2026-09-18 | Catvertising, Next Gen, Design |
 | THE STACK / YEAR IN GAMES cards | ❌ Not built | Design |
-| "Published on Google Play" | ⏳ `versionCode 11` in production review as of 2026-09-18. Check the listing is live before claiming it | Everywhere |
+| "Published on Google Play" | ✅ **True as of 2026-09-19**: `versionCode 11` is live in production, `https://play.google.com/store/apps/details?id=com.mikhilnaika.continueapp` | Everywhere |
+| Rewarded ads work on the live app | 🟠 AdMob verified and linked 2026-09-19 (real ad units). **Watch one real ad on the live app before claiming it** (a new app can see "no fill" for a while). Still **client-side** rewards, not SSV; see the SSV row above | Catvertising |
 | Pro-trial for judges | 🟠 2026-09-18: 7-day trial **live in the store**; **200 one-time promo codes** created (spreadsheet held privately, never in the repo). Both need a device check. Judge steps: Play Store → Payments & subscriptions → **Redeem code** → open CONTINUE? → YOU tab shows PRO (else GO PRO → RESTORE PURCHASE). Only put codes in a judges-only field (`docs/09`) | Deliverables |
 
 **What IS true and worth selling:** everything in the next section. For each feature,
@@ -67,7 +68,7 @@ then show a friend's pile opening from the chat.
 
 | Item | Required by | Status |
 |---|---|---|
-| Play Store URL (published) | Gaming, Design, Catvertising | ☐ |
+| Play Store URL (published) | Gaming, Design, Catvertising | ✅ live 2026-09-19: `https://play.google.com/store/apps/details?id=com.mikhilnaika.continueapp` |
 | Public repo + OSI licence visible in About | Next Gen | ☐ |
 | Demo video < 2:00, public on YouTube | All | ☐ |
 | Text description | All | ☐ |
