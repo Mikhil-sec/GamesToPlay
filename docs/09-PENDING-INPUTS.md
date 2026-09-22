@@ -5,7 +5,10 @@
 > update it as items resolve, and never block on an item marked "not yet needed."
 >
 > ✅ **2026-09-19 (latest): dashboard steps 1–2 done, `versionCode 14` device-tested and working.**
-> Remaining: `git push` (privacy §5) → promote 14 to production → Devpost (`docs/07`).
+> **Next session starts at the "▶ NEXT SESSION" block at the top of `docs/10`.** Mikhil's items:
+> ① commit + `git push` (privacy §5 must be live first) → ② promote 14 to production →
+> ③ trial-badge check + one promo-code redemption → ④ Devpost with Claude (by 09-26).
+> Items 1–4 in the v12 list below are **done**; item 5 is ③ here.
 >
 > Last updated: **2026-09-19 (late)** — current build is **`versionCode 14` / `0.14.0`** (music
 > packs, lower levels). Earlier: **`versionCode 12` / `0.12.0` is built and signed**

@@ -5,6 +5,19 @@
 > what's next. Update it whenever you finish a chunk of work or discover something that
 > changes this picture — don't let it go stale like a comment nobody re-reads.
 >
+> ## ▶ NEXT SESSION: START HERE (written at the end of the 2026-09-19 session)
+>
+> The app is **done and code-frozen** at `versionCode 14` / `0.14.0` (device-verified). What's left:
+> 1. **Commit + push** the 09-19 work (~46 files: v12–v14 code, `res/raw` audio,
+>    `tools/make_audio.py`, docs, and `docs/privacy.html` §5, which must be live before v14 is).
+> 2. **Mikhil promotes `versionCode 14` to production** in Play Console.
+> 3. *Optional, no build:* refresh the Play listing + "what's new" in `docs/13` (FREE PLAY, coin
+>    drops, music packs are now true).
+> 4. *Still open:* see the 7-day trial badge from a never-subscribed account; redeem one promo code.
+> 5. **Devpost** (deadline 2026-09-30 11:45pm PDT; Claude access ends **09-27**, so finish
+>    Claude-dependent work by 09-26): description, Gaming / Design / Catvertising write-ups, video
+>    script. Start at `docs/07` "READ FIRST" + "The bar and the field".
+>
 > ✅ **2026-09-19 (latest): `versionCode 14` verified on device by Mikhil** — AdMob SSV + both
 > RevenueCat reward rules configured; verified ads, FREE PLAY, coin bridge, music packs and levels
 > all working. **Code freeze from here**: next is promoting 14 to production, then the submission.
