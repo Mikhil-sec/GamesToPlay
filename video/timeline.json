@@ -1,0 +1,606 @@
+{
+  "_readme": "The whole video in one file. Lengths are in BARS at 104 bpm (1 bar = 4 beats = 2.31 s), so every cut lands on the beat. After changing any 'bars' or 'music', re-run `python ../tools/make_video_score.py` so the soundtrack follows. Clips go in public/clips/. Clip fields: 'from' = seconds into the file to start at; 'beats' = how long it runs; 'freezeAt' = seconds after 'from' to hold the frame; 'bar' = the colour behind the phone's status bar in that clip (a clean status bar is painted over it). Clip audio is muted (the phone recorded almost nothing); the app's own sounds are placed with 'sfx' at a beat within the shot. In headline text, *stars* make words gold, _underscores_ green. 'at' = beat within the shot when a line appears.",
+  "bpm": 104,
+  "fps": 60,
+  "phoneAspect": 0.4469,
+  "shots": [
+    {
+      "id": "cold",
+      "bars": 2,
+      "music": "intro",
+      "layout": "cold",
+      "clips": [
+        {
+          "file": "01_cold_open.mp4",
+          "from": 3.25,
+          "bar": "#07080b"
+        }
+      ],
+      "sfx": [
+        {
+          "file": "sfx_crt_on.wav",
+          "beat": 1.2,
+          "volume": 0.9
+        }
+      ]
+    },
+    {
+      "id": "hook",
+      "bars": 3,
+      "music": "build",
+      "layout": "left",
+      "clips": [
+        {
+          "file": "02_time_budget.mp4",
+          "from": 0.5,
+          "bar": "#101018"
+        }
+      ],
+      "lines": [
+        {
+          "text": "29 GAMES.",
+          "at": 0
+        },
+        {
+          "text": "1,167 HOURS.",
+          "at": 2
+        },
+        {
+          "text": "FINISHED BY *2030.*",
+          "at": 6
+        }
+      ],
+      "push": {
+        "beat": 6,
+        "scale": 1.7,
+        "focusY": 0.175
+      }
+    },
+    {
+      "id": "tagline",
+      "bars": 2,
+      "music": "build2",
+      "layout": "title",
+      "lines": [
+        {
+          "text": "THE GAMES YOU STARTED",
+          "at": 0
+        },
+        {
+          "text": "_DESERVE AN ENDING._",
+          "at": 2
+        }
+      ]
+    },
+    {
+      "id": "save",
+      "bars": 4,
+      "music": "drop",
+      "layout": "right",
+      "clips": [
+        {
+          "file": "04_share_from_chat.mp4",
+          "from": 0.8,
+          "beats": 4,
+          "bar": "#000000"
+        },
+        {
+          "file": "04_share_from_chat.mp4",
+          "from": 5.45,
+          "beats": 12,
+          "bar": "#000000"
+        }
+      ],
+      "kicker": "STAGE 1 · SAVE",
+      "lines": [
+        {
+          "text": "SAVE IT FROM *ANYWHERE*",
+          "at": 0
+        }
+      ],
+      "sub": "From any app. Even offline.",
+      "push": {
+        "beat": 5,
+        "scale": 1.35,
+        "focusY": 0.72
+      },
+      "sfx": [
+        {
+          "file": "sfx_blip.wav",
+          "beat": 4.1,
+          "volume": 0.6
+        },
+        {
+          "file": "sfx_add.wav",
+          "beat": 14.9,
+          "volume": 0.8
+        }
+      ]
+    },
+    {
+      "id": "organize",
+      "bars": 3,
+      "music": "groove",
+      "layout": "left",
+      "clips": [
+        {
+          "file": "05a_grid.mp4",
+          "from": 2.5,
+          "beats": 2,
+          "bar": "#101018"
+        },
+        {
+          "file": "05b_filters.mp4",
+          "from": 3.6,
+          "beats": 10,
+          "bar": "#101018"
+        }
+      ],
+      "kicker": "STAGE 2 · ORGANIZE",
+      "lines": [
+        {
+          "text": "ORGANIZE THE *PILE*",
+          "at": 0
+        }
+      ],
+      "sub": "One set of filters, everywhere.",
+      "sfx": [
+        {
+          "file": "sfx_blip.wav",
+          "beat": 2.52,
+          "volume": 0.7
+        },
+        {
+          "file": "sfx_blip.wav",
+          "beat": 4.77,
+          "volume": 0.7
+        },
+        {
+          "file": "sfx_blip.wav",
+          "beat": 6.85,
+          "volume": 0.7
+        },
+        {
+          "file": "sfx_blip.wav",
+          "beat": 10.23,
+          "volume": 0.7
+        }
+      ]
+    },
+    {
+      "id": "decision",
+      "bars": 2,
+      "music": "break",
+      "layout": "title",
+      "lines": [
+        {
+          "text": "A BACKLOG ISN'T A LIST PROBLEM.",
+          "at": 0
+        },
+        {
+          "text": "IT'S A *DECISION* PROBLEM.",
+          "at": 3
+        }
+      ]
+    },
+    {
+      "id": "dials",
+      "bars": 2,
+      "music": "rise",
+      "layout": "right",
+      "clips": [
+        {
+          "file": "07_draw.mp4",
+          "from": 1.9,
+          "bar": "#101018"
+        }
+      ],
+      "kicker": "STAGE 3 · DECIDE",
+      "lines": [
+        {
+          "text": "SET THE *DIALS*",
+          "at": 0
+        }
+      ],
+      "sub": "Your time. Your mood.",
+      "sfx": [
+        {
+          "file": "sfx_blip.wav",
+          "beat": 0.8,
+          "volume": 0.7
+        }
+      ]
+    },
+    {
+      "id": "lever",
+      "bars": 1,
+      "music": "stop",
+      "layout": "center",
+      "clips": [
+        {
+          "file": "07_draw.mp4",
+          "from": 7.5,
+          "bar": "#101018"
+        }
+      ],
+      "push": {
+        "beat": 0,
+        "scale": 1.55,
+        "focusY": 0.56,
+        "center": true
+      },
+      "sfx": [
+        {
+          "file": "sfx_lever.wav",
+          "beat": 2.2
+        }
+      ]
+    },
+    {
+      "id": "deal",
+      "bars": 4,
+      "music": "drop2",
+      "layout": "left",
+      "clips": [
+        {
+          "file": "07_draw.mp4",
+          "from": 9.8,
+          "bar": "#101018"
+        }
+      ],
+      "lines": [
+        {
+          "text": "PULL THE *LEVER*",
+          "at": 0
+        }
+      ],
+      "sub": "Three cards. Why each one fits.",
+      "push": {
+        "beat": 9,
+        "scale": 1.8,
+        "focusY": 0.64
+      },
+      "sfx": [
+        {
+          "file": "sfx_deal.wav",
+          "beat": 0.45
+        },
+        {
+          "file": "sfx_deal.wav",
+          "beat": 0.9
+        },
+        {
+          "file": "sfx_deal.wav",
+          "beat": 1.35
+        },
+        {
+          "file": "sfx_flip.wav",
+          "beat": 3.6
+        }
+      ]
+    },
+    {
+      "id": "gate",
+      "bars": 3,
+      "music": "continue",
+      "layout": "right",
+      "clips": [
+        {
+          "file": "10_gate.mp4",
+          "from": 2.1,
+          "bar": "#101018"
+        }
+      ],
+      "kicker": "INSERT COIN",
+      "lines": [
+        {
+          "text": "OUT OF DRAWS?",
+          "at": 0
+        },
+        {
+          "text": "*CONTINUE?*",
+          "at": 2
+        }
+      ],
+      "sub": "Continuing always cost a coin.",
+      "sfx": [
+        {
+          "file": "sfx_lever.wav",
+          "beat": 0.9,
+          "volume": 0.8
+        },
+        {
+          "file": "sfx_error.wav",
+          "beat": 2.25,
+          "volume": 0.5
+        }
+      ]
+    },
+    {
+      "id": "coin",
+      "bars": 3,
+      "music": "continue",
+      "layout": "left",
+      "clips": [
+        {
+          "file": "10_gate.mp4",
+          "from": 28.3,
+          "beats": 3,
+          "bar": "#101018"
+        },
+        {
+          "file": "11_insert_coin.mp4",
+          "from": 6.35,
+          "beats": 9,
+          "bar": "#101018"
+        }
+      ],
+      "lines": [
+        {
+          "text": "THE AD *IS* THE COIN",
+          "at": 0
+        }
+      ],
+      "sub": "Opt-in. Verified by RevenueCat.",
+      "push": {
+        "beat": 3,
+        "scale": 1.25,
+        "focusY": 0.42
+      },
+      "sfx": [
+        {
+          "file": "sfx_blip.wav",
+          "beat": 2.25,
+          "volume": 0.7
+        },
+        {
+          "file": "sfx_coin.wav",
+          "beat": 5.86
+        }
+      ]
+    },
+    {
+      "id": "packs",
+      "bars": 2,
+      "music": "theme2",
+      "layout": "right",
+      "clips": [
+        {
+          "file": "12b_music_pack.mp4",
+          "from": 2.0,
+          "bar": "#101018"
+        }
+      ],
+      "lines": [
+        {
+          "text": "LIKE THIS SOUNDTRACK?",
+          "at": 0
+        },
+        {
+          "text": "*5 COINS.*",
+          "at": 3
+        }
+      ],
+      "sub": "Coins buy music packs.",
+      "push": {
+        "beat": 3,
+        "scale": 1.2,
+        "focusY": 0.42
+      },
+      "sfx": [
+        {
+          "file": "sfx_coin_drop.wav",
+          "beat": 5.2,
+          "volume": 0.7
+        }
+      ]
+    },
+    {
+      "id": "freeplay",
+      "bars": 3,
+      "music": "free",
+      "layout": "left",
+      "clips": [
+        {
+          "file": "12_free_play.mp4",
+          "from": 44.95,
+          "bar": "#101018"
+        }
+      ],
+      "lines": [
+        {
+          "text": "ONE AD =",
+          "at": 0
+        },
+        {
+          "text": "AN HOUR OF *REAL PRO*",
+          "at": 1
+        }
+      ],
+      "sub": "No interstitials. Ever.",
+      "sfx": [
+        {
+          "file": "sfx_powerup.wav",
+          "beat": 1.8,
+          "volume": 0.7
+        },
+        {
+          "file": "sfx_deal.wav",
+          "beat": 2.4
+        },
+        {
+          "file": "sfx_deal.wav",
+          "beat": 2.85
+        }
+      ]
+    },
+    {
+      "id": "clear",
+      "bars": 5,
+      "music": "victory",
+      "layout": "right",
+      "clips": [
+        {
+          "file": "13_clear_rank.mp4",
+          "from": 1.0,
+          "bar": "#07080b"
+        }
+      ],
+      "kicker": "STAGE 4 · COMPLETE",
+      "lines": [
+        {
+          "text": "FINISH *SOMETHING*",
+          "at": 0
+        }
+      ],
+      "sub": "Your stats, rolled like film credits.",
+      "push": {
+        "beat": 8,
+        "scale": 1.12,
+        "focusY": 0.5,
+        "center": true
+      },
+      "sfx": [
+        {
+          "file": "sfx_crt_on.wav",
+          "beat": 3.2,
+          "volume": 0.6
+        },
+        {
+          "file": "sfx_coin_drop.wav",
+          "beat": 10.4,
+          "volume": 0.8
+        }
+      ]
+    },
+    {
+      "id": "rank",
+      "bars": 3,
+      "music": "groove",
+      "layout": "left",
+      "clips": [
+        {
+          "file": "14_rank.mp4",
+          "from": 10.9,
+          "beats": 4,
+          "bar": "#07080b"
+        },
+        {
+          "file": "14_rank.mp4",
+          "from": 16.2,
+          "beats": 3,
+          "bar": "#07080b"
+        },
+        {
+          "file": "14_rank.mp4",
+          "from": 28.6,
+          "beats": 5,
+          "freezeAt": 1.0,
+          "bar": "#07080b"
+        }
+      ],
+      "kicker": "STAGE 5 · RATE",
+      "lines": [
+        {
+          "text": "NO STARS.",
+          "at": 0
+        },
+        {
+          "text": "*HEAD TO HEAD.*",
+          "at": 1
+        }
+      ],
+      "sub": "Which did you enjoy more?",
+      "push": {
+        "beat": 7.4,
+        "scale": 1.8,
+        "focusY": 0.485
+      },
+      "sfx": [
+        {
+          "file": "sfx_select.wav",
+          "beat": 1.55
+        },
+        {
+          "file": "sfx_select.wav",
+          "beat": 4.95
+        },
+        {
+          "file": "sfx_add.wav",
+          "beat": 7.7,
+          "volume": 0.9
+        }
+      ]
+    },
+    {
+      "id": "share",
+      "bars": 4,
+      "music": "drop2",
+      "layout": "right",
+      "clips": [
+        {
+          "file": "15a_high_scores.mp4",
+          "from": 1.5,
+          "beats": 7,
+          "bar": "#101018"
+        },
+        {
+          "file": "15b_friend_pile.mp4",
+          "from": 2.2,
+          "beats": 3,
+          "bar": "#030205"
+        },
+        {
+          "file": "15c_sam_pile.mp4",
+          "from": 4.4,
+          "beats": 6,
+          "bar": "#101018"
+        }
+      ],
+      "kicker": "STAGE 6 · SHARE",
+      "lines": [
+        {
+          "text": "SHARE YOUR *PILE*",
+          "at": 0
+        }
+      ],
+      "sub": "No accounts. Nothing stored on a server.",
+      "overlay": {
+        "image": "brand/high_scores_card.png",
+        "beat": 3.5,
+        "beats": 3.5
+      },
+      "sfx": [
+        {
+          "file": "sfx_whoosh.wav",
+          "beat": 3.4,
+          "volume": 0.7
+        },
+        {
+          "file": "sfx_friend.wav",
+          "beat": 7.6,
+          "volume": 0.8
+        }
+      ]
+    },
+    {
+      "id": "end",
+      "bars": 3,
+      "music": "outro",
+      "layout": "end",
+      "sfx": [
+        {
+          "file": "sfx_coin.wav",
+          "beat": 4,
+          "volume": 0.9
+        }
+      ]
+    }
+  ],
+  "endCard": {
+    "tagline": "The games you started deserve an ending.",
+    "store": "Available now on Google Play",
+    "repo": "github.com/Mikhil-sec/GamesToPlay",
+    "credits": "Built with RevenueCat  ·  Game data freely provided by IGDB.com  ·  Music: original, CC0"
+  }
+}

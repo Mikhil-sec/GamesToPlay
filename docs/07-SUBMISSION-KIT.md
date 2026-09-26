@@ -71,8 +71,8 @@ verification, and `docs/02-PRODUCT-SPEC.md` has the design.
   model (`docs/12-SECURITY.md`) including an SSRF fix, rate limiting that protects KV quota, and
   the signed pile-link format with a cross-language (Python) fixture test.
 
-**The demo video script below predates FRIENDS.** Consider giving it a beat: share your pile,
-then show a friend's pile opening from the chat.
+**The demo video script below was rewritten 2026-09-22** against `versionCode 14` (FRIENDS, FREE
+PLAY and the verified INSERT COIN each get a beat; Steam import is gone).
 
 ---
 
@@ -143,25 +143,133 @@ build. **Nobody has a video yet.** Ours is the biggest single lever left.
 
 ---
 
-## Demo video script (1:50)
+## Demo video: shooting script (rewritten 2026-09-22 against `versionCode 14`)
 
-The single highest-leverage asset. Most judges form their opinion here. Record on a real
-device at 60fps, screen-record with `adb`/scrcpy for clean frames, and show your hands for
-the gesture moments.
+The single highest-leverage asset, and no rival had a video as of 09-19. The 08-12 script this
+replaces sold Steam import, which was never built.
 
-| Time | Shot | Voiceover |
-|---|---|---|
-| **0:00–0:10** | Cold open: CRT powers on, `CONTINUE?` glows, coin drops | "Every gamer has a pile of shame. Mine is eighty-seven games I'll never play." |
-| **0:10–0:22** | Steam import: empty app → 143 games flooding in | "So I built CONTINUE? — a bucket list for games that works like an arcade cabinet." |
-| **0:22–0:35** | **Share Target**: real YouTube video → share sheet → sheet resolves → added. Show the source app the whole time. | "Saw a game in a video? Share it. Two seconds, and it's in your pile — you never leave YouTube." |
-| **0:35–0:55** | **DRAW**: set dials, pull the lever, cards deal and flip, swipe up | "But a backlog isn't a list problem, it's a *decision* problem. Tell it how much time you've got and what mood you're in — and pull the lever." |
-| **0:55–1:05** | **CONTINUE? screen**, INSERT COIN, ad, coin lands, FREE PLAY banner starts | "Out of draws? In an arcade, you insert a coin. Watch an ad, get a coin — or an hour of full Pro, verified server-side by RevenueCat." |
-| **1:05–1:22** | Mark complete → **Credits Roll** in full | "And when you finally finish something, it doesn't just tick a box." |
-| **1:22–1:38** | **Pairwise ranking**, then the HIGH SCORE share card | "Then rank it — not with stars nobody calibrates, but head to head, until you've got a real top ten worth arguing about." |
-| **1:38–1:50** | Share card posted; end on the logo + Play badge | "CONTINUE? Your pile of shame, finally fun. On Google Play now." |
+**✅ Recorded and rendered 2026-09-26** (Claude drove the phone over USB with scrcpy + adb). Final:
+`video/out/CONTINUE-demo.mp4` (1920×1080, 60 fps, 1:51), thumbnail `video/out/thumbnail.png`. Clips
+in `video/public/clips/` (gitignored), raw app screenshots for Devpost in `store/screens-raw/`.
+What changed from the plan below: the camera "hand on lever" shot became a push-in on the screen
+recording; the SAVE demo shares from a mock chat page (no creator videos, no real contacts); the
+share shot pulls the HIGH SCORES card out of the phone instead of showing the system chooser (it
+lists personal contacts); clip audio is muted and the app's own SFX are placed in the edit; a
+clean status bar is painted over every clip. Hook numbers are the real demo pile: 29 games,
+1,167 hours, finished by 2030.
 
-**Rules:** no copyrighted music (original or documented CC0 only) · no influencer names or
-likenesses · show it running on a real device · under 2:00 hard.
+**Revision 2 (same day, after Mikhil's review):** sublines cut to ~5 words and enlarged, because they were
+unreadable in the Devpost embed; added a **music-pack shot** ("LIKE THIS SOUNDTRACK? 5 COINS.", which
+closes the earn → spend coin loop for Catvertising; the score really is built from the NEON DRIVE
+instruments); organize trimmed to 3 bars. 1:53.
+**Deliberately left out:** a YouTube/TikTok share demo (showing YouTube's UI and a creator's video
+risks both the trademark rule and the influencer rule; the chat demo shows the same matching), so
+**say it in the Devpost text instead**; and DISCOVER (browsing, adds game art, serves no criterion
+better than what's shown).
+
+**It's built in code: `video/` (Remotion).** `video/timeline.json` is the edit, and it's the source of
+truth for timings and headline text (the table below was the plan it was built from).
+`video/SHOTLIST.md` is the recording checklist, and `video/README.md` explains the workflow. The
+soundtrack is `tools/make_video_score.py`: an original, CC0 score made from the app's NEON DRIVE
+instruments, arranged bar by bar to the timeline.
+
+**Devpost rules:** under 2:00 (target **1:50**) · public on YouTube · shows the app *running on
+the device* · **no third-party trademarks, copyrighted music or other material**.
+
+### The look (what the reference videos have in common)
+
+1. **The phone never fills the frame.** Screen recordings sit inside a phone frame on one
+   designed background, taking ~55% of the frame height, and they are always moving slowly
+   (push-in, drift, a few degrees of 3D tilt). A static full-screen recording looks like a bug report.
+2. **One idea per shot, named in ≤4 words** in big type beside the phone. Those words carry the
+   story, so the video works muted (many judges watch it muted in the gallery).
+3. **One brand, start to finish.** Background `#08090C` with a soft gold (`#F7C948`) glow behind
+   the phone and 3% scanlines; headlines in **Chakra Petch Bold, uppercase, gold**; sublines in
+   **Inter, `#9AA3B2`**. The same fonts and colours as the app (`docs/03`).
+4. **Zoom in on what matters.** A phone at 55% height is too small to read, so when the detail
+   *is* the point (the reason a card matched, `YOUR #4 OF ALL TIME`), push in on it.
+5. **Cut on the beat.** Shots last 3–5 s, cuts land on bar lines, and the app's own sound
+   effects punctuate them.
+6. **Hands prove it's real.** One or two camera shots of a real phone in a hand, in a dark room,
+   satisfy "functioning on the device" without argument.
+
+### Audio
+
+- **Music = the app's own tracks** (`app/src/main/res/raw/music_*.ogg`, original, CC0, see
+  `docs/AUDIO-LICENSE.md`). This removes the copyright risk entirely and keeps the sound on-brand.
+  Bed: `music_neondrive_title` (synthwave, 104 bpm, so one bar ≈ 2.31 s). Switch to
+  `music_arcade_continue` for the CONTINUE? gate, and `music_*_victory` under the Credits Roll.
+- **Record with MUSIC off and SOUND on** (YOU tab), so the clips carry the real SFX (lever,
+  deal, coin) and the music is laid in cleanly in the edit.
+- **No voiceover by default.** Headlines carry it. Add VO only if it can be recorded clean (quiet
+  room, mic close); a rough VO costs more than it adds.
+
+### Third-party material (rule 4, plus the influencer rule)
+
+- 🔴 **Never share from a YouTube/TikTok creator's video** for the SAVE shot. That is an
+  influencer's likeness *and* their copyright, which is a double disqualification. Share from a chat
+  message instead (a friend texting "you HAVE to play Hades").
+- 🔴 **Never show an ad's content.** It is a third-party advertiser's material. Cut from the
+  INSERT COIN tap straight to `VERIFYING WITH REVENUECAT…`.
+- Game cover art is IGDB-provided and appears because the app is working as designed. Keep it
+  incidental: never make a game's logo the hero of a shot, the title card or the thumbnail. Put
+  the IGDB credit on the end card.
+- No real people's names in the demo pile, friend names or messages.
+- The "Get it on Google Play" badge is allowed under Google's badge guidelines. Use the official
+  artwork unmodified.
+
+### Shots (1:50)
+
+| Time | Headline on screen | Shot (screen recording unless marked 📷 camera) | Sound |
+|---|---|---|---|
+| **0:00–0:06** | — | The real cold open: CRT powers on, `CONTINUE?` | `sfx_crt_on` |
+| **0:06–0:14** | *{N} GAMES. {H} HOURS.* → *FINISHED BY {YEAR}.* | PILE time budget with the real numbers from the demo pile, then push in on the year | Music starts on the bar |
+| **0:14–0:18** | **THE GAMES YOU STARTED DESERVE AN ENDING.** | Title card, then the logo | — |
+| **0:18–0:28** | **SAVE IT FROM ANYWHERE** / *even offline, even a screenshot* | Messages: friend's text → share → CONTINUE? sheet slides over the chat → matched → ADD | `sfx_add` |
+| **0:28–0:36** | **ORGANIZE THE PILE** / *max 3 in NOW PLAYING* | Three fast cuts: STACK 3D scroll · filters · STATS | `sfx_tick` |
+| **0:36–0:40** | **A BACKLOG ISN'T A LIST PROBLEM.** / **IT'S A DECISION PROBLEM.** | Text card over a slow STACK drift | — |
+| **0:40–0:44** | **SET THE DIALS** | DRAW: time + mood + genre dials | — |
+| **0:44–0:47** | — | 📷 **Hand pulls the lever** on the real phone | `sfx_lever` |
+| **0:47–0:56** | **PULL THE LEVER** | Cards deal and flip; push in on *why it matched*; swipe → PLAYING IT | `sfx_deal`, `sfx_flip`, `sfx_select` |
+| **0:56–1:02** | **OUT OF DRAWS? CONTINUE?** | The gate: magenta countdown, INSERT COIN | Music → `arcade_continue` |
+| **1:02–1:08** | **THE AD IS THE COIN.** / *opt-in, verified by RevenueCat* | Tap → *(cut, no ad content)* → `VERIFYING WITH REVENUECAT…` → coin lands | `sfx_coin` |
+| **1:08–1:14** | **ONE AD = AN HOUR OF REAL PRO** / *no interstitials. ever.* | FREE PLAY: top bar `FREE PLAY 59:xx`, DRAW deals freely | `sfx_powerup` |
+| **1:14–1:26** | **FINISH SOMETHING** | Mark cleared → the Credits Roll, allowed to play. Optional 📷 cut to the phone in hand | `*_victory` |
+| **1:26–1:33** | **NO STARS. HEAD TO HEAD.** | RANK: `WHICH DID YOU ENJOY MORE?` ×2–3 → push in on `YOUR #N OF ALL TIME` | `sfx_select` |
+| **1:33–1:43** | **SHARE YOUR PILE** / *no accounts. nothing stored on a server.* | HIGH SCORES card → share pile link → a friend's pile opens in FRIENDS (use `tools/make_pile_link.py` for the friend) | `sfx_friend` |
+| **1:43–1:50** | **CONTINUE?** / *On Google Play now* | End card: logo, Play badge, `github.com/…` (Next Gen), "Built with RevenueCat", small IGDB credit | Music resolves |
+
+The headlines follow the Gaming criteria verbs (save, organize, complete, rate, share) plus
+DECIDE, which is our one idea, and the three CONTINUE? beats carry the whole Catvertising thesis.
+Design is in every shot rather than in a section of its own.
+
+### Recording checklist
+
+- **Device:** an Android **phone**, not the Tab S6 Lite, because the frame and the judges' mental model
+  are a phone. It must be a **free user with no draws left** for the gate and FREE PLAY shots (a
+  Lifetime tester account never sees the gate), with the live Play build.
+- **Demo pile:** ~30–60 real, varied games, some cleared and some ranked, so every screen has
+  content; scroll everything once first so covers are cached. Record the time-budget numbers
+  and use them in the hook.
+- **Clean status bar** (Android demo mode; One UI may ignore parts of it, so set DND on as well):
+  ```sh
+  adb shell settings put global sysui_demo_allowed 1
+  adb shell am broadcast -a com.android.systemui.demo -e command enter
+  adb shell am broadcast -a com.android.systemui.demo -e command clock -e hhmm 0930
+  adb shell am broadcast -a com.android.systemui.demo -e command battery -e level 100 -e plugged false
+  adb shell am broadcast -a com.android.systemui.demo -e command network -e wifi show -e level 4
+  adb shell am broadcast -a com.android.systemui.demo -e command notifications -e visible false
+  # afterwards: ... -e command exit
+  ```
+- **Capture:** `scrcpy --record=shot01.mp4 -b 20M --max-fps=60` (records device audio on Android
+  11+; `--no-playback` hides the mirror). One file per shot, and three takes of each. Move slowly and
+  deliberately, and pause about 1 s before and after each tap so there's room to cut.
+- **📷 Hand shots:** second phone, landscape, 4K/60 if available, locked exposure (tap-and-hold),
+  room lights off, phone brightness at max, one warm lamp off to the side. Film the lever pull 5+
+  times.
+- **YouTube:** Public (not unlisted), title `CONTINUE? — the games you started deserve an ending`,
+  a custom thumbnail (logo on void, no game art; needs a phone-verified YouTube account), and
+  upload a caption file.
 
 ---
 
